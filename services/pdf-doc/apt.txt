@@ -26,6 +26,16 @@ python3-wheel
 python3-pip
 python3-distutils
 python3-venv
+python3-setuptools-scm
+python3-build
+python3-packaging
+python3-cython3
 libc6-dev
 gcc
 g++
+make
+cmake
+automake
+autoconf
+libtool
+python3-dev-tools
