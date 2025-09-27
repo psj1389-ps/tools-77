@@ -24,3 +24,8 @@ pkg-config
 python3-setuptools
 python3-wheel
 python3-pip
+python3-distutils
+python3-venv
+libc6-dev
+gcc
+g++
