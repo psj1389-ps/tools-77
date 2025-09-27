@@ -146,15 +146,38 @@ def pdf_to_docx_with_pdf2docx(pdf_path, output_path):
 def ocr_image_to_blocks(pil_image):
     """이미지에서 단어 단위 텍스트와 위치(좌표)를 추출"""
     try:
+        # OCR 가용성 확인
+        try:
+            import pytesseract
+            # Tesseract 경로 자동 감지 (Render 환경 대응)
+            if os.path.exists('/usr/bin/tesseract'):
+                pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+        except ImportError:
+            print("pytesseract를 사용할 수 없습니다.")
+            return []
+        
         img = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         gray = cv2.medianBlur(gray, 3)
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         gray = clahe.apply(gray)
 
-        config = r"--oem 3 --psm 6 -l kor+eng"
-        data = pytesseract.image_to_data(gray, config=config,
-                                         output_type=pytesseract.Output.DICT)
+        try:
+            config = r"--oem 3 --psm 6 -l kor+eng"
+            data = pytesseract.image_to_data(gray, config=config,
+                                             output_type=pytesseract.Output.DICT)
+        except Exception as ocr_error:
+            print(f"한국어+영어 OCR 실패: {ocr_error}")
+            # Fallback: 영어만으로 재시도
+            try:
+                config = r"--oem 3 --psm 6 -l eng"
+                data = pytesseract.image_to_data(gray, config=config,
+                                                 output_type=pytesseract.Output.DICT)
+                print("영어 OCR로 fallback 성공")
+            except Exception:
+                print("OCR 완전 실패")
+                return []
+        
         blocks = []
         n = len(data["text"])
         for i in range(n):
@@ -307,6 +330,16 @@ def extract_text_with_layout_from_pdf(pdf_path: str) -> Dict[str, Any]:
 def extract_text_blocks_with_ocr(image):
     """OCR을 사용하여 이미지에서 텍스트 블록 추출 (개선된 버전)"""
     try:
+        # OCR 가용성 확인
+        try:
+            import pytesseract
+            # Tesseract 경로 자동 감지 (Render 환경 대응)
+            if os.path.exists('/usr/bin/tesseract'):
+                pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+        except ImportError:
+            print("  - pytesseract를 사용할 수 없습니다.")
+            return ""
+        
         # 이미지 전처리로 OCR 정확도 향상
         img_array = np.array(image)
         
@@ -324,8 +357,19 @@ def extract_text_blocks_with_ocr(image):
         enhanced = clahe.apply(denoised)
         
         # OCR 수행
-        config = r"--oem 3 --psm 6 -l kor+eng"
-        text = pytesseract.image_to_string(enhanced, config=config)
+        try:
+            config = r"--oem 3 --psm 6 -l kor+eng"
+            text = pytesseract.image_to_string(enhanced, config=config)
+        except Exception as ocr_error:
+            print(f"  - 한국어+영어 OCR 실패: {ocr_error}")
+            # Fallback: 영어만으로 재시도
+            try:
+                config = r"--oem 3 --psm 6 -l eng"
+                text = pytesseract.image_to_string(enhanced, config=config)
+                print("  - 영어 OCR로 fallback 성공")
+            except Exception:
+                print("  - OCR 완전 실패")
+                return ""
         
         if text.strip():
             cleaned_text = clean_special_characters(text.strip())
