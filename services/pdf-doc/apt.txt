@@ -3,3 +3,8 @@ tesseract-ocr
 tesseract-ocr-kor
 libgl1
 libglib2.0-0
+build-essential
+python3-dev
+libffi-dev
+libssl-dev
+pkg-config

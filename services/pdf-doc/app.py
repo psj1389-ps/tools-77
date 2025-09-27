@@ -214,32 +214,29 @@ def clean_special_characters(text: str) -> str:
     return text.strip()
 
 def analyze_pdf_orientation(pdf_path: str) -> Dict[str, Any]:
-    """PDF 페이지 크기를 분석하여 문서 방향 감지"""
+    """PDF 페이지 크기를 분석하여 문서 방향 감지 (pdfplumber 사용)"""
     try:
-        doc = fitz.open(pdf_path)
+        import pdfplumber
         page_orientations = []
         
-        for page_num in range(len(doc)):
-            page = doc.load_page(page_num)
-            page_rect = page.rect
-            width = page_rect.width
-            height = page_rect.height
-            
-            # 가로/세로 방향 판단
-            if width > height:
-                orientation = 'landscape'  # 가로형
-            else:
-                orientation = 'portrait'   # 세로형
-            
-            page_orientations.append({
-                'page': page_num,
-                'width': width,
-                'height': height,
-                'orientation': orientation,
-                'aspect_ratio': width / height
-            })
-        
-        doc.close()
+        with pdfplumber.open(pdf_path) as pdf:
+            for page_num, page in enumerate(pdf.pages):
+                width = page.width
+                height = page.height
+                
+                # 가로/세로 방향 판단
+                if width > height:
+                    orientation = 'landscape'  # 가로형
+                else:
+                    orientation = 'portrait'   # 세로형
+                
+                page_orientations.append({
+                    'page': page_num,
+                    'width': width,
+                    'height': height,
+                    'orientation': orientation,
+                    'aspect_ratio': width / height
+                })
         
         # 전체 문서의 주요 방향 결정
         landscape_count = sum(1 for p in page_orientations if p['orientation'] == 'landscape')
@@ -266,56 +263,36 @@ def analyze_pdf_orientation(pdf_path: str) -> Dict[str, Any]:
         }
 
 def extract_text_with_layout_from_pdf(pdf_path: str) -> Dict[str, Any]:
-    """PDF에서 레이아웃 정보와 함께 텍스트 추출 (방향 감지 포함)"""
+    """PDF에서 레이아웃 정보와 함께 텍스트 추출 (pdfplumber 사용)"""
     try:
-        doc = fitz.open(pdf_path)
+        import pdfplumber
         all_text_blocks = []
         
         # PDF 방향 분석
         orientation_info = analyze_pdf_orientation(pdf_path)
         print(f"PDF 방향 분석 결과: {orientation_info['primary_orientation']} (가로: {orientation_info['landscape_pages']}, 세로: {orientation_info['portrait_pages']})")
         
-        for page_num in range(len(doc)):
-            page = doc.load_page(page_num)
-            page_rect = page.rect
-            
-            # 텍스트 블록 추출
-            text_blocks = page.get_text("dict")
-            
-            for block in text_blocks.get("blocks", []):
-                if "lines" in block:
-                    for line in block["lines"]:
-                        line_text = ""
-                        line_bbox = line["bbox"]
-                        
-                        for span in line.get("spans", []):
-                            span_text = span.get("text", "")
-                            if span_text.strip():
-                                line_text += span_text
-                        
-                        if line_text.strip():
-                            # 텍스트 정렬 감지
-                            text_center = (line_bbox[0] + line_bbox[2]) / 2
-                            page_center = page_rect.width / 2
-                            
-                            if abs(text_center - page_center) < 20:
+        with pdfplumber.open(pdf_path) as pdf:
+            for page_num, page in enumerate(pdf.pages):
+                # 텍스트 추출
+                text = page.extract_text()
+                if text:
+                    lines = text.split('\n')
+                    for line_num, line in enumerate(lines):
+                        if line.strip():
+                            # 간단한 정렬 감지 (왼쪽 정렬로 기본 설정)
+                            alignment = 'left'
+                            if line.strip().center(len(line)) == line:
                                 alignment = 'center'
-                            elif (page_rect.width - line_bbox[2]) < (line_bbox[0]):
+                            elif line.startswith(' ' * 10):  # 많은 공백으로 시작하면 오른쪽 정렬로 추정
                                 alignment = 'right'
-                            else:
-                                alignment = 'left'
                             
                             all_text_blocks.append({
-                                'text': clean_special_characters(line_text),
-                                'bbox': line_bbox,
+                                'text': clean_special_characters(line.strip()),
+                                'bbox': [0, line_num * 12, page.width, (line_num + 1) * 12],  # 추정 bbox
                                 'page': page_num,
                                 'alignment': alignment
                             })
-        
-        doc.close()
-        
-        # 텍스트 블록들을 위치 순서대로 정렬
-        all_text_blocks.sort(key=lambda x: (x['page'], x['bbox'][1], x['bbox'][0]))
         
         return {
             'text_blocks': all_text_blocks,

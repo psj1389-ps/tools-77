@@ -1,4 +1,4 @@
-import fitz  # PyMuPDF
+# import fitz  # PyMuPDF - 컴파일 오류로 인해 비활성화
 from docx import Document
 from docx.shared import Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -562,6 +562,10 @@ class UltimateImageConverter:
 
     def convert_with_guaranteed_images(self, pdf_path, output_path, mode='balanced'):
         """이미지 누락을 방지하고 원본 레이아웃을 최대한 보존하는 PDF 변환 메서드 (다중화된 추출 시스템)"""
+        # PyMuPDF 컴파일 오류로 인해 비활성화
+        self.logger.error("PyMuPDF 컴파일 오류로 인해 convert_with_guaranteed_images 메서드를 사용할 수 없습니다.")
+        return False
+        
         # 변환 모드 설정
         extraction_modes = {
             'image': {'priority': 'image_first', 'quality': 'ultra'},
@@ -581,7 +585,7 @@ class UltimateImageConverter:
             'failed_extractions': 0
         }
         try:
-            pdf_doc = fitz.open(pdf_path)
+            # pdf_doc = fitz.open(pdf_path)  # PyMuPDF 비활성화
             docx_doc = Document()
             
             # 첫 번째 페이지로 문서 방향 설정

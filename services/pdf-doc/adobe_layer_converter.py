@@ -106,8 +106,9 @@ class AdobeSDKForceInitializer:
         offline_libraries = []
         
         try:
-            import fitz
-            offline_libraries.append('PyMuPDF')
+            # import fitz  # PyMuPDF 컴파일 오류로 인해 비활성화
+            # offline_libraries.append('PyMuPDF')
+            pass
         except ImportError:
             pass
         
@@ -270,8 +271,12 @@ class AdobeLayerConverter:
     
     def _fallback_pymupdf(self, pdf_path: str) -> Optional[Dict[str, Any]]:
         """PyMuPDF를 사용한 대체 추출 방법"""
+        # PyMuPDF 컴파일 오류로 인해 비활성화
+        logging.warning("PyMuPDF 컴파일 오류로 인해 _fallback_pymupdf 메서드를 사용할 수 없습니다.")
+        return None
+        
         try:
-            import fitz  # PyMuPDF
+            # import fitz  # PyMuPDF - 컴파일 오류로 인해 비활성화
             logging.info("📚 PyMuPDF 대체 방법 사용")
             
             doc = fitz.open(pdf_path)

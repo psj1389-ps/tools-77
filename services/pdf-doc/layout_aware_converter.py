@@ -1,4 +1,4 @@
-import fitz  # PyMuPDF
+# import fitz  # PyMuPDF - 컴파일 오류로 인해 비활성화
 from docx import Document
 from docx.shared import Pt, Cm, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -83,9 +83,12 @@ class LayoutAwareConverter:
              return None 
  
      def convert(self, pdf_path, docx_path): 
-         """PDF를 레이아웃을 보존하여 DOCX로 변환합니다.""" 
-         logging.info(f"'{pdf_path}' 파일 변환 시작...") 
-         pdf_doc = fitz.open(pdf_path) 
+        """PDF를 레이아웃을 보존하여 DOCX로 변환합니다.""" 
+        logging.info(f"'{pdf_path}' 파일 변환 시작...") 
+        # PyMuPDF 컴파일 오류로 인해 비활성화
+        logging.error("LayoutAwareConverter는 현재 PyMuPDF 컴파일 오류로 인해 사용할 수 없습니다.")
+        return False
+        # pdf_doc = fitz.open(pdf_path) 
          docx_doc = Document() 
          
          # A4 용지 크기에 맞춰 여백 설정 (선택 사항) 

@@ -1,6 +1,5 @@
 Flask==2.3.3
 Werkzeug==2.3.7
-PyMuPDF==1.23.0
 python-docx==0.8.11
 reportlab==4.0.4
 Pillow>=10.2.0
@@ -16,3 +15,4 @@ pdfplumber
 python-pptx
 PyPDF2
 requests
+pdf2docx
