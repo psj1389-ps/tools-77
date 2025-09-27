@@ -58,9 +58,26 @@ app.config["MAX_CONTENT_LENGTH"] = max_mb * 1024 * 1024
 def health():
     return "ok", 200
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "5000"))
-    app.run(host="0.0.0.0", port=port)
+@app.route("/env-check")
+def env_check():
+    """환경변수 설정 상태 확인 (디버깅용)"""
+    env_status = {
+        "adobe_sdk_available": ADOBE_SDK_AVAILABLE,
+        "environment_variables": {
+            "ADOBE_CLIENT_ID": "설정됨" if os.getenv('ADOBE_CLIENT_ID') else "미설정",
+            "ADOBE_CLIENT_SECRET": "설정됨" if os.getenv('ADOBE_CLIENT_SECRET') else "미설정",
+            "ADOBE_ORGANIZATION_ID": "설정됨" if os.getenv('ADOBE_ORGANIZATION_ID') else "미설정",
+            "ADOBE_ACCOUNT_ID": "설정됨" if os.getenv('ADOBE_ACCOUNT_ID') else "미설정",
+            "ADOBE_TECHNICAL_ACCOUNT_EMAIL": "설정됨" if os.getenv('ADOBE_TECHNICAL_ACCOUNT_EMAIL') else "미설정",
+            "ADOBE_PRIVATE_KEY_PATH": os.getenv('ADOBE_PRIVATE_KEY_PATH', 'private.key')
+        },
+        "config_values": {
+            "client_id_length": len(os.getenv('ADOBE_CLIENT_ID', '')),
+            "client_secret_length": len(os.getenv('ADOBE_CLIENT_SECRET', '')),
+            "organization_id_length": len(os.getenv('ADOBE_ORGANIZATION_ID', ''))
+        }
+    }
+    return jsonify(env_status)
 
 # Adobe PDF Services API 설정 - 환경변수에서 로드
 ADOBE_CONFIG = {
@@ -1339,4 +1356,5 @@ def upload_file():
         return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    port = int(os.environ.get("PORT", "5000"))
+    app.run(debug=True, host='0.0.0.0', port=port)
