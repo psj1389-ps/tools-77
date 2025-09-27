@@ -19,49 +19,69 @@ except Exception as e:
     OCR_AVAILABLE = False
     logging.warning(f"OCR 엔진을 사용할 수 없습니다: {e}")
 
-def extract_text_with_ocr(pdf_path, lang='kor+eng'):
-    """
-    PDF에서 OCR을 사용하여 텍스트 추출
-    
-    Args:
-        pdf_path (str): PDF 파일 경로
-        lang (str): OCR 언어 설정 (기본값: 한국어+영어)
-    
-    Returns:
-        list: 각 페이지별 추출된 텍스트 리스트
-    """
-    if not OCR_AVAILABLE:
-        print("OCR 엔진을 사용할 수 없습니다. 빈 결과를 반환합니다.")
-        return []
-    
+def convert_pdf_to_images_and_extract_text(pdf_path, lang='kor+eng'):
+    """PDF를 이미지로 변환하고 OCR로 텍스트를 추출합니다."""
     try:
-        # PDF를 이미지로 변환
-        images = convert_from_path(pdf_path, dpi=300)
+        # Tesseract 가용성 확인
+        if not OCR_AVAILABLE:
+            print("Tesseract OCR을 사용할 수 없습니다.")
+            return []
+        
+        # Tesseract 경로 설정 (Render 환경 고려)
+        try:
+            pytesseract.get_tesseract_version()
+        except Exception:
+            # Render 환경에서 Tesseract 경로 설정
+            pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+        
+        # PDF를 이미지로 변환 (메모리 최적화 - Render 환경 고려)
+        images = convert_from_path(
+            pdf_path, 
+            dpi=150,  # DPI 낮춤으로 메모리 사용량 감소
+            fmt='PNG',
+            thread_count=1,  # 단일 스레드로 메모리 사용량 제어
+            use_pdftocairo=False  # 메모리 효율적인 변환 방식 사용
+        )
         
         extracted_texts = []
         for i, image in enumerate(images):
             print(f"페이지 {i+1} OCR 처리 중...")
             
             try:
-                # OCR로 텍스트 추출
-                text = pytesseract.image_to_string(image, lang=lang)
-                extracted_texts.append(text)
-                print(f"페이지 {i+1} 완료 - {len(text)} 글자 추출")
-            except Exception as ocr_error:
-                print(f"페이지 {i+1} OCR 실패: {ocr_error}")
-                # Fallback: 영어만으로 재시도
-                try:
-                    text = pytesseract.image_to_string(image, lang='eng')
-                    extracted_texts.append(text)
-                    print(f"페이지 {i+1} 영어 OCR로 완료 - {len(text)} 글자 추출")
-                except Exception:
-                    extracted_texts.append("")
-                    print(f"페이지 {i+1} OCR 완전 실패")
+                # 이미지 크기가 너무 크면 리사이즈 (메모리 절약 - Render 환경 고려)
+                max_size = 1500  # Render 환경에서 메모리 제한 고려하여 축소
+                if image.width > max_size or image.height > max_size:
+                    image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+                
+                # 이미지 모드 최적화 (메모리 사용량 감소)
+                if image.mode not in ('RGB', 'L'):
+                    image = image.convert('RGB')
+                
+                # OCR 설정 (Render 환경 최적화)
+                custom_config = r'--oem 3 --psm 6 -c tessedit_do_invert=0'
+                
+                # OCR 실행 (타임아웃 설정)
+                text = pytesseract.image_to_string(image, lang=lang, config=custom_config, timeout=30)
+                extracted_texts.append({
+                    'page': i + 1,
+                    'text': text.strip()
+                })
+                
+            except Exception as e:
+                print(f"페이지 {i+1} OCR 처리 중 오류: {e}")
+                extracted_texts.append({
+                    'page': i + 1,
+                    'text': ''
+                })
+            finally:
+                # 메모리 정리
+                if image:
+                    image.close()
         
         return extracted_texts
         
     except Exception as e:
-        print(f"OCR 처리 오류: {e}")
+        print(f"PDF OCR 처리 중 오류 발생: {e}")
         return []
 
 def test_ocr_with_sample():
@@ -111,6 +131,55 @@ def test_ocr_with_sample():
     except Exception as e:
         print(f"OCR 테스트 오류: {e}")
         return None
+
+def extract_text_from_image_with_ocr(image_path, lang='kor+eng'):
+    """이미지에서 OCR을 사용하여 텍스트를 추출합니다."""
+    try:
+        # Tesseract 가용성 확인
+        if not OCR_AVAILABLE:
+            print("Tesseract OCR을 사용할 수 없습니다.")
+            return ""
+            
+        # Tesseract 경로 설정 (Render 환경 고려)
+        try:
+            pytesseract.get_tesseract_version()
+        except Exception:
+            # Render 환경에서 Tesseract 경로 설정
+            pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+        
+        # 이미지 로드 및 전처리 (메모리 최적화)
+        image = None
+        try:
+            image = Image.open(image_path)
+            
+            # 이미지 크기가 너무 크면 리사이즈 (메모리 절약 - Render 환경 고려)
+            max_size = 1500  # Render 환경에서 메모리 제한 고려하여 축소
+            if image.width > max_size or image.height > max_size:
+                image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+            
+            # 이미지 모드 최적화 (메모리 사용량 감소)
+            if image.mode not in ('RGB', 'L'):
+                image = image.convert('RGB')
+            
+            # OCR 설정 (Render 환경 최적화)
+            custom_config = r'--oem 3 --psm 6 -c tessedit_do_invert=0'
+            
+            # OCR 실행 (타임아웃 설정)
+            text = pytesseract.image_to_string(image, lang=lang, config=custom_config, timeout=30)
+            
+            return text.strip()
+            
+        finally:
+            # 메모리 정리
+            if image:
+                image.close()
+        
+    except pytesseract.TesseractError as e:
+        print(f"Tesseract OCR 오류: {e}")
+        return ""
+    except Exception as e:
+        print(f"OCR 처리 중 오류 발생: {e}")
+        return ""
 
 if __name__ == "__main__":
     print("=== OCR 기능 테스트 ===")

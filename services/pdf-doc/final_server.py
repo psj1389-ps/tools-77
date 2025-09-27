@@ -689,8 +689,30 @@ def convert_file():
                                 # 이미지 파일 존재 확인
                                 if os.path.exists(image_path):
                                     try:
-                                        # 이미지 그리기
-                                        img_reader = ImageReader(image_path)
+                                        # 메모리 최적화된 이미지 처리 (Render 환경 고려)
+                                        from PIL import Image as PILImage
+                                        
+                                        # 이미지 크기 사전 확인 및 최적화
+                                        with PILImage.open(image_path) as pil_img:
+                                            # 이미지가 너무 크면 임시로 리사이즈
+                                            max_dimension = 2000  # Render 환경 메모리 제한 고려
+                                            if pil_img.width > max_dimension or pil_img.height > max_dimension:
+                                                # 임시 리사이즈된 이미지 생성
+                                                temp_img = pil_img.copy()
+                                                temp_img.thumbnail((max_dimension, max_dimension), PILImage.Resampling.LANCZOS)
+                                                
+                                                # 임시 파일로 저장
+                                                import tempfile
+                                                with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+                                                    temp_img.save(temp_file.name, 'PNG', optimize=True)
+                                                    optimized_image_path = temp_file.name
+                                                    temp_files.append(optimized_image_path)
+                                                temp_img.close()
+                                            else:
+                                                optimized_image_path = image_path
+                                        
+                                        # 이미지 그리기 (메모리 최적화된 경로 사용)
+                                        img_reader = ImageReader(optimized_image_path)
                                         c.drawImage(img_reader, image_x, y_pos - final_height, 
                                                   width=final_width, height=final_height,
                                                   preserveAspectRatio=True, anchor='c')
@@ -714,9 +736,25 @@ def convert_file():
                                                 y_pos -= line_height_base
                                 
                                     except Exception as e:
-                                        print(f"이미지 그리기 오류: {e}")
+                                        error_msg = f"이미지 처리 오류 ({os.path.basename(image_path)}): {str(e)}"
+                                        print(f"❌ {error_msg}")
+                                        
+                                        # 상세한 에러 로깅 (Render 환경 디버깅용)
+                                        import traceback
+                                        print(f"상세 에러 정보: {traceback.format_exc()}")
+                                        
+                                        # 에러 유형별 메시지 제공
+                                        if "Memory" in str(e) or "memory" in str(e):
+                                            error_display = f"[메모리 부족으로 이미지 로드 실패: {os.path.basename(image_path)}]"
+                                        elif "Permission" in str(e) or "permission" in str(e):
+                                            error_display = f"[권한 오류로 이미지 로드 실패: {os.path.basename(image_path)}]"
+                                        elif "format" in str(e).lower() or "Format" in str(e):
+                                            error_display = f"[지원되지 않는 이미지 형식: {os.path.basename(image_path)}]"
+                                        else:
+                                            error_display = f"[이미지 로드 실패: {os.path.basename(image_path)}]"
+                                        
                                         # 이미지 오류 시 대체 텍스트
-                                        draw_korean_text(c, margin_left, y_pos, f"[이미지 {image_count + 1} - 로드 실패]", base_font_size)
+                                        draw_korean_text(c, margin_left, y_pos, error_display, base_font_size)
                                         y_pos -= line_height_base * 2
                                         image_count += 1
                                         

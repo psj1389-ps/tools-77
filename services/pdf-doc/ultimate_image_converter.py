@@ -1,4 +1,9 @@
-# import fitz  # PyMuPDF - 컴파일 오류로 인해 비활성화
+try:
+    import fitz  # PyMuPDF
+    FITZ_AVAILABLE = True
+except ImportError as e:
+    FITZ_AVAILABLE = False
+    print(f"Warning: PyMuPDF (fitz) not available: {e}")
 from docx import Document
 from docx.shared import Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -18,6 +23,10 @@ class UltimateImageConverter:
 
     def _robust_image_extraction(self, pdf_doc, page, img_info):
         """다양한 방법으로 이미지를 안정적으로 추출합니다 (다중화된 추출 로직)."""
+        if not FITZ_AVAILABLE:
+            self.logger.error("PyMuPDF (fitz) 라이브러리를 사용할 수 없습니다.")
+            return None
+            
         xref = img_info[0]
         
         # 방법 1: 직접 Pixmap 추출
@@ -165,6 +174,10 @@ class UltimateImageConverter:
 
     def _extract_vector_graphics(self, page):
         """페이지에서 벡터 그래픽(선, 도형, 말풍선 등)을 추출하여 이미지로 변환합니다."""
+        if not FITZ_AVAILABLE:
+            self.logger.warning("PyMuPDF (fitz) 라이브러리를 사용할 수 없어 벡터 그래픽 추출을 건너뜁니다.")
+            return None
+            
         try:
             # 페이지의 모든 그리기 명령어 추출
             drawings = page.get_drawings()
@@ -562,9 +575,10 @@ class UltimateImageConverter:
 
     def convert_with_guaranteed_images(self, pdf_path, output_path, mode='balanced'):
         """이미지 누락을 방지하고 원본 레이아웃을 최대한 보존하는 PDF 변환 메서드 (다중화된 추출 시스템)"""
-        # PyMuPDF 컴파일 오류로 인해 비활성화
-        self.logger.error("PyMuPDF 컴파일 오류로 인해 convert_with_guaranteed_images 메서드를 사용할 수 없습니다.")
-        return False
+        if not FITZ_AVAILABLE:
+            self.logger.error("PyMuPDF (fitz) 라이브러리를 사용할 수 없어 convert_with_guaranteed_images 메서드를 사용할 수 없습니다.")
+            self.logger.info("대체 변환 방법을 사용하거나 PyMuPDF를 설치해주세요.")
+            return False
         
         # 변환 모드 설정
         extraction_modes = {
@@ -585,7 +599,11 @@ class UltimateImageConverter:
             'failed_extractions': 0
         }
         try:
-            # pdf_doc = fitz.open(pdf_path)  # PyMuPDF 비활성화
+            if not FITZ_AVAILABLE:
+                self.logger.error("PyMuPDF가 사용 불가능하여 변환을 중단합니다.")
+                return False
+                
+            pdf_doc = fitz.open(pdf_path)
             docx_doc = Document()
             
             # 첫 번째 페이지로 문서 방향 설정
