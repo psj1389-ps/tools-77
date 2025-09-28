@@ -27,6 +27,7 @@ opencv-python-headless==4.9.0.80
 pytesseract==0.3.10
 
 Flask-Cors
+pdf2docx
 
 # Utilities
 qrcode>=7.4.2
