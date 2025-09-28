@@ -528,9 +528,39 @@ def convert_pdf_to_docx_with_adobe_direct(pdf_path, output_path):
         # ExportPDF 작업 생성
         export_pdf_job = ExportPDFJob(input_asset=input_asset, export_pdf_params=export_pdf_params)
         
-        # 작업 제출 및 결과 대기
-        location = pdf_services.submit(export_pdf_job)
-        pdf_services_response = pdf_services.get_job_result(location, ExportPDFResult)
+        print(">>> [DEBUG 1] Adobe 변환 함수 진입")
+        try:
+            print(">>> [DEBUG 2] try 블록 진입, execute() 호출 직전")
+            
+            # 작업 제출 및 결과 대기 - 실제 Adobe API 실행 지점
+            location = pdf_services.submit(export_pdf_job)
+            pdf_services_response = pdf_services.get_job_result(location, ExportPDFResult)
+            
+            print(">>> [DEBUG 3] execute() 호출 성공")
+            conversion_success = True  # 성공했음을 표시
+            
+        except ServiceApiException as e:
+            # Adobe API 관련 에러 (가장 흔함)
+            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            print(f"❌ Adobe ServiceApiException 발생: {e}")
+            print(f"    - Status Code: {e.status_code if hasattr(e, 'status_code') else 'N/A'}")
+            print(f"    - Error Code: {e.error_code if hasattr(e, 'error_code') else 'N/A'}")
+            print(f"    - Error Message: {e.message if hasattr(e, 'message') else str(e)}")
+            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            conversion_success = False
+            raise  # 기존 예외 처리로 전달
+            
+        except Exception as e:
+            # 그 외 모든 예상치 못한 에러
+            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            print(f"❌ 변환 중 알 수 없는 예외 발생: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            conversion_success = False
+            raise  # 기존 예외 처리로 전달
+            
+        print(">>> [DEBUG 4] Adobe 변환 함수 종료")
         
         # 결과 다운로드
         result_asset = pdf_services_response.get_result().get_asset()
