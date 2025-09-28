@@ -534,7 +534,9 @@ def extract_pdf_content_with_adobe(pdf_path):
         # Adobe API 자격 증명 설정 (올바른 클래스 사용)
         credentials = ServicePrincipalCredentials(
             client_id=client_id,
-            client_secret=client_secret
+            client_secret=client_secret,
+            organization_id=os.environ.get("ADOBE_ORGANIZATION_ID"),
+            account_id=os.environ.get("ADOBE_ACCOUNT_ID")
         )
         
         # PDF Services 인스턴스 생성
