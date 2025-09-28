@@ -34,6 +34,7 @@ try:
     from adobe.pdfservices.operation.pdfjobs.params.export_pdf.export_pdf_params import ExportPDFParams
     from adobe.pdfservices.operation.pdfjobs.params.export_pdf.export_pdf_target_format import ExportPDFTargetFormat
     from adobe.pdfservices.operation.pdfjobs.result.export_pdf_result import ExportPDFResult
+    import traceback
     
     adobe_available = True
     ADOBE_SDK_AVAILABLE = True
@@ -389,6 +390,58 @@ def analyze_pdf_orientation(pdf_path: str) -> Dict[str, Any]:
             'portrait_pages': 0,
             'total_pages': 0
         }
+
+def adobe_pdf_to_docx(input_path: str, output_path: str):
+    print(">>> [DEBUG] adobe_pdf_to_docx: start", flush=True)
+    info = {}
+    try:
+        creds = ServicePrincipalCredentials(
+            client_id=os.environ["ADOBE_CLIENT_ID"],
+            client_secret=os.environ["ADOBE_CLIENT_SECRET"],
+            organization_id=os.environ["ADOBE_ORGANIZATION_ID"],
+            account_id=os.environ["ADOBE_ACCOUNT_ID"],
+        )
+        pdf_services = PDFServices(credentials=creds)
+        with open(input_path, "rb") as f:
+            input_bytes = f.read()
+
+        print(">>> [DEBUG] upload", flush=True)
+        asset = pdf_services.upload(input_bytes, PDFServicesMediaType.PDF)
+
+        params = ExportPDFParams(ExportPDFTargetFormat.DOCX)
+        job = ExportPDFJob(asset, params)
+
+        print(">>> [DEBUG] submit", flush=True)
+        location = pdf_services.submit(job)
+
+        print(">>> [DEBUG] get_job_result", flush=True)
+        result_asset = pdf_services.get_job_result(location, ExportPDFResult)
+
+        print(">>> [DEBUG] get_content", flush=True)
+        content = pdf_services.get_content(result_asset)
+
+        with open(output_path, "wb") as f:
+            f.write(content)
+
+        print(">>> [DEBUG] success", flush=True)
+        return True, info
+
+    except Exception as e:
+        info = {
+            "type": type(e).__name__,
+            "status": getattr(e, "status_code", None),
+            "error_code": getattr(e, "error_code", None),
+            "message": getattr(e, "message", str(e)),
+            "request_id": getattr(e, "request_id", None),
+            "error_report": getattr(e, "error_report", None),
+        }
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", flush=True)
+        print("❌ Adobe call failed", flush=True)
+        for k, v in info.items():
+            print(f"{k}: {v}", flush=True)
+        traceback.print_exc()
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", flush=True)
+        return False, info
 
 def extract_text_with_layout_from_pdf(pdf_path: str) -> Dict[str, Any]:
     """PDF에서 레이아웃 정보와 함께 텍스트 추출 (pdfplumber 사용)"""
@@ -1705,24 +1758,21 @@ def convert_file_api():
                         adobe_ready = False
                     
                     if adobe_ready:
-                        print(">>> [DEBUG] /convert: entering Adobe branch", flush=True)
-                        from adobe_call import adobe_pdf_to_docx
+                        print(">>> [DEBUG] /convert: Adobe branch", flush=True)
                         ok, info = adobe_pdf_to_docx(input_path, output_path)
                         print(">>> [DEBUG] /convert: Adobe finished ok=", ok, "info=", info, flush=True)
                         if not ok:
-                            # 1) 임시 우회: 자동 폴백
-                            print(">>> [DEBUG] /convert: fallback to pdf2docx due to Adobe error", flush=True)
-                            conversion_result = pdf_to_docx(input_path, output_path, quality)
-                            if not conversion_result:
+                            # 임시 우회: 자동 폴백
+                            print(">>> [DEBUG] /convert: fallback to pdf2docx", flush=True)
+                            ok = pdf_to_docx(input_path, output_path, quality)
+                            if not ok:
                                 return jsonify(success=False, error="ADOBE_AND_FALLBACK_FAILED", detail=info), 400
-                            conversion_success = conversion_result
-                        else:
-                            conversion_success = True
                     else:
-                        conversion_result = pdf_to_docx(input_path, output_path, quality)
-                        if not conversion_result:
+                        ok = pdf_to_docx(input_path, output_path, quality)
+                        if not ok:
                             return jsonify(success=False, error="PDF2DOCX_FAIL"), 400
-                        conversion_success = conversion_result
+                    
+                    conversion_success = True
                     
                 elif file_ext == 'docx':
                     # DOCX → PDF 변환
