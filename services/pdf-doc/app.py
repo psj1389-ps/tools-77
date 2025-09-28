@@ -142,28 +142,33 @@ ADOBE_CONFIG = {
 def is_adobe_api_available():
     """Adobe API 사용 가능 여부 확인"""
     if not ADOBE_SDK_AVAILABLE:
-        if ENABLE_DEBUG_LOGS:
-            print("Adobe SDK가 설치되지 않음")
+        print("❌ Adobe SDK가 설치되지 않음 - Adobe API 사용 불가")
         return False
     
     client_id = ADOBE_CONFIG["client_credentials"]["client_id"]
     client_secret = ADOBE_CONFIG["client_credentials"]["client_secret"]
+    organization_id = ADOBE_CONFIG["service_principal_credentials"]["organization_id"]
+    account_id = ADOBE_CONFIG["service_principal_credentials"]["account_id"]
     
-    has_credentials = bool(client_id and client_secret)
+    # 모든 필수 자격증명 확인
+    has_credentials = bool(client_id and client_secret and organization_id and account_id)
     
-    if ENABLE_DEBUG_LOGS:
-        print(f"Adobe API 자격증명 상태: {'✅ 사용 가능' if has_credentials else '❌ 누락'}")
-        if not has_credentials:
-            missing = []
-            if not client_id: missing.append('ADOBE_CLIENT_ID')
-            if not client_secret: missing.append('ADOBE_CLIENT_SECRET')
-            print(f"누락된 환경변수: {', '.join(missing)}")
+    print(f"🔍 Adobe API 자격증명 상태 확인:")
+    print(f"  - ADOBE_CLIENT_ID: {'✅' if client_id else '❌'} {'(' + client_id[:8] + '...)' if client_id else '(누락)'}")
+    print(f"  - ADOBE_CLIENT_SECRET: {'✅' if client_secret else '❌'} {'(설정됨)' if client_secret else '(누락)'}")
+    print(f"  - ADOBE_ORGANIZATION_ID: {'✅' if organization_id else '❌'} {'(' + organization_id[:8] + '...)' if organization_id else '(누락)'}")
+    print(f"  - ADOBE_ACCOUNT_ID: {'✅' if account_id else '❌'} {'(' + account_id[:8] + '...)' if account_id else '(누락)'}")
     
     if not has_credentials:
+        missing = []
+        if not client_id: missing.append('ADOBE_CLIENT_ID')
+        if not client_secret: missing.append('ADOBE_CLIENT_SECRET')
+        if not organization_id: missing.append('ADOBE_ORGANIZATION_ID')
+        if not account_id: missing.append('ADOBE_ACCOUNT_ID')
+        print(f"❌ Adobe API 사용 불가 - 누락된 환경변수: {', '.join(missing)}")
         return False
     
-    # OAuth Server-to-Server authentication - no private key file needed
-    
+    print("✅ Adobe API 자격증명 완료 - OAuth Server-to-Server 인증 준비됨")
     return True
 
 # Adobe SDK 상태 확인 및 초기화
@@ -483,6 +488,77 @@ def extract_text_blocks_with_ocr(image):
         print(f"  - OCR 처리 중 오류: {e}")
         return ""
 
+def convert_pdf_to_docx_with_adobe_direct(pdf_path, output_path):
+    """Adobe PDF Services API를 사용하여 PDF를 DOCX로 직접 변환하는 함수"""
+    if not ADOBE_SDK_AVAILABLE:
+        print("Adobe PDF Services SDK를 사용할 수 없습니다.")
+        return False
+    
+    try:
+        # Adobe API 자격증명 설정
+        client_id = ADOBE_CONFIG["client_credentials"]["client_id"]
+        client_secret = ADOBE_CONFIG["client_credentials"]["client_secret"]
+        organization_id = ADOBE_CONFIG["service_principal_credentials"]["organization_id"]
+        account_id = ADOBE_CONFIG["service_principal_credentials"]["account_id"]
+        
+        if not all([client_id, client_secret, organization_id, account_id]):
+            print("Adobe API 자격증명이 완전하지 않습니다.")
+            return False
+        
+        # ServicePrincipalCredentials 생성 (OAuth Server-to-Server)
+        credentials = ServicePrincipalCredentials(
+            client_id=client_id,
+            client_secret=client_secret,
+            organization_id=organization_id,
+            account_id=account_id
+        )
+        
+        # PDFServices 인스턴스 생성
+        pdf_services = PDFServices(credentials=credentials)
+        
+        # 입력 파일을 StreamAsset으로 생성
+        with open(pdf_path, 'rb') as file:
+            input_stream = file.read()
+        
+        input_asset = pdf_services.upload(input_stream=input_stream, mime_type=PDFServicesMediaType.PDF)
+        
+        # ExportPDF 작업 매개변수 설정
+        export_pdf_params = ExportPDFParams(
+            target_format=ExportPDFTargetFormat.DOCX
+        )
+        
+        # ExportPDF 작업 생성
+        export_pdf_job = ExportPDFJob(input_asset=input_asset, export_pdf_params=export_pdf_params)
+        
+        # 작업 제출 및 결과 대기
+        location = pdf_services.submit(export_pdf_job)
+        pdf_services_response = pdf_services.get_job_result(location, ExportPDFResult)
+        
+        # 결과 다운로드
+        result_asset = pdf_services_response.get_result().get_asset()
+        stream_asset = pdf_services.get_content(result_asset)
+        
+        # 결과를 파일로 저장
+        with open(output_path, "wb") as file:
+            file.write(stream_asset.get_input_stream())
+        
+        print(f"Adobe API를 사용하여 PDF를 DOCX로 성공적으로 변환했습니다: {output_path}")
+        return True
+        
+    except ServiceApiException as e:
+        print(f"Adobe ServiceApiException: {e}")
+        print(f"Request ID: {getattr(e, 'request_id', 'N/A')}")
+        print(f"Status Code: {getattr(e, 'status_code', 'N/A')}")
+        print(f"Error Code: {getattr(e, 'error_code', 'N/A')}")
+        print(f"Error Message: {getattr(e, 'message', str(e))}")
+        return False
+        
+    except Exception as e:
+        print(f"Adobe API 변환 중 오류 발생: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 def extract_pdf_content_with_adobe(pdf_path):
     """Adobe PDF Services API를 사용하여 PDF 내용을 추출하는 함수"""
     if not ADOBE_SDK_AVAILABLE:
@@ -544,13 +620,48 @@ def extract_pdf_content_with_adobe(pdf_path):
         return None
 
 def pdf_to_docx(pdf_path, output_path, quality='medium'):
-    """PDF를 DOCX로 변환하는 함수 (하이브리드 접근법: pdf2docx 우선, OCR 보조)"""
+    """PDF를 DOCX로 변환하는 함수 (Adobe API 우선, pdf2docx 및 OCR 보조)"""
     try:
         # 파일명에서 확장자 제거하여 디버깅용 prefix 생성
         filename_prefix = os.path.splitext(os.path.basename(pdf_path))[0]
         
-        # 1단계: pdf2docx 라이브러리를 우선적으로 시도
-        print("=== 1단계: pdf2docx 라이브러리 변환 시도 ===")
+        # 1단계: Adobe API를 최우선으로 시도
+        if adobe_available and is_adobe_api_available():
+            print("=== 1단계: Adobe API 변환 시도 ===")
+            print("✅ Adobe API로 변환을 시작합니다.")
+            try:
+                # Adobe SDK를 사용한 직접 PDF to DOCX 변환 시도
+                adobe_result = convert_pdf_to_docx_with_adobe_direct(pdf_path, output_path)
+                if adobe_result:
+                    print(f"Adobe API 변환 성공: {output_path} (크기: {os.path.getsize(output_path)} bytes)")
+                    return True
+                else:
+                    print("Adobe API 직접 변환 실패, Extract API로 시도...")
+                    
+            except ServiceApiException as e:
+                print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                print(f"❌ Adobe ServiceApiException 발생: {e}")
+                print(f"    - Request ID: {getattr(e, 'request_id', 'N/A')}")
+                print(f"    - Status Code: {getattr(e, 'status_code', 'N/A')}")
+                print(f"    - Error Code: {getattr(e, 'error_code', 'N/A')}")
+                print(f"    - Error Message: {getattr(e, 'message', str(e))}")
+                print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                
+            except Exception as e:
+                print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                print(f"❌ Adobe API 변환 중 알 수 없는 예외 발생: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        else:
+            print("⚠️ Adobe API 사용 불가 - fallback 모드로 변환합니다.")
+            if not ADOBE_SDK_AVAILABLE:
+                print("  - Adobe SDK가 설치되지 않음")
+            else:
+                print("  - Adobe API 환경변수가 설정되지 않음")
+        
+        # 2단계: pdf2docx 라이브러리를 두 번째로 시도
+        print("=== 2단계: pdf2docx 라이브러리 변환 시도 ===")
         if pdf_to_docx_with_pdf2docx(pdf_path, output_path):
             print("pdf2docx 변환 성공! Microsoft Word 호환성 확인...")
             
@@ -561,7 +672,7 @@ def pdf_to_docx(pdf_path, output_path, quality='medium'):
             else:
                 print("pdf2docx 변환 결과가 부적절함. 대체 방법 시도...")
         
-        print("=== 2단계: 기존 OCR 방법으로 fallback ===")
+        print("=== 3단계: 기존 OCR 방법으로 fallback ===")
         # 품질 설정에 따른 파라미터 설정 (최적화됨)
         quality_settings = {
             'medium': {
