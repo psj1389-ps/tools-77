@@ -395,6 +395,24 @@ def adobe_pdf_to_docx(input_path: str, output_path: str):
     print(">>> [DEBUG] adobe_pdf_to_docx: start", flush=True)
     info = {}
     try:
+        # 파일 크기 및 기본 정보 확인
+        file_size = os.path.getsize(input_path)
+        print(f">>> [DEBUG] 파일 크기: {file_size} bytes ({file_size/1024/1024:.2f} MB)", flush=True)
+        
+        # Adobe API 파일 크기 제한 확인 (100MB)
+        if file_size > 100 * 1024 * 1024:
+            print(">>> [DEBUG] 파일이 Adobe API 제한(100MB)을 초과함", flush=True)
+            info["error"] = "FILE_TOO_LARGE_FOR_ADOBE"
+            return False, info
+        
+        # PDF 파일 유효성 검사
+        with open(input_path, "rb") as f:
+            header = f.read(8)
+            if not header.startswith(b'%PDF-'):
+                print(">>> [DEBUG] 유효하지 않은 PDF 헤더", flush=True)
+                info["error"] = "INVALID_PDF_HEADER"
+                return False, info
+        
         creds = ServicePrincipalCredentials(
             client_id=os.environ["ADOBE_CLIENT_ID"],
             client_secret=os.environ["ADOBE_CLIENT_SECRET"],
@@ -406,25 +424,45 @@ def adobe_pdf_to_docx(input_path: str, output_path: str):
         with open(input_path, "rb") as f:
             input_bytes = f.read()
 
-        print(">>> [DEBUG] upload", flush=True)
-        asset = pdf_services.upload(input_bytes, PDFServicesMediaType.PDF)
+        print(">>> [DEBUG] upload - 파일 업로드 시작", flush=True)
+        try:
+            asset = pdf_services.upload(input_bytes, PDFServicesMediaType.PDF)
+            print(">>> [DEBUG] upload - 파일 업로드 성공", flush=True)
+        except Exception as upload_error:
+            print(f">>> [DEBUG] upload - 파일 업로드 실패: {upload_error}", flush=True)
+            raise
 
         params = ExportPDFParams(ExportPDFTargetFormat.DOCX)
         job = ExportPDFJob(asset, params)
 
-        print(">>> [DEBUG] submit", flush=True)
-        location = pdf_services.submit(job)
+        print(">>> [DEBUG] submit - 작업 제출 시작", flush=True)
+        try:
+            location = pdf_services.submit(job)
+            print(f">>> [DEBUG] submit - 작업 제출 성공, location: {location}", flush=True)
+        except Exception as submit_error:
+            print(f">>> [DEBUG] submit - 작업 제출 실패: {submit_error}", flush=True)
+            raise
 
-        print(">>> [DEBUG] get_job_result", flush=True)
-        result_asset = pdf_services.get_job_result(location, ExportPDFResult)
+        print(">>> [DEBUG] get_job_result - 결과 대기 시작", flush=True)
+        try:
+            result_asset = pdf_services.get_job_result(location, ExportPDFResult)
+            print(">>> [DEBUG] get_job_result - 결과 대기 성공", flush=True)
+        except Exception as result_error:
+            print(f">>> [DEBUG] get_job_result - 결과 대기 실패: {result_error}", flush=True)
+            raise
 
-        print(">>> [DEBUG] get_content", flush=True)
-        content = pdf_services.get_content(result_asset)
+        print(">>> [DEBUG] get_content - 콘텐츠 다운로드 시작", flush=True)
+        try:
+            content = pdf_services.get_content(result_asset)
+            print(f">>> [DEBUG] get_content - 콘텐츠 다운로드 성공, 크기: {len(content)} bytes", flush=True)
+        except Exception as content_error:
+            print(f">>> [DEBUG] get_content - 콘텐츠 다운로드 실패: {content_error}", flush=True)
+            raise
 
         with open(output_path, "wb") as f:
             f.write(content)
 
-        print(">>> [DEBUG] success", flush=True)
+        print(">>> [DEBUG] success - 전체 변환 성공", flush=True)
         return True, info
 
     except Exception as e:
@@ -438,8 +476,17 @@ def adobe_pdf_to_docx(input_path: str, output_path: str):
         }
         print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", flush=True)
         print("❌ Adobe call failed", flush=True)
+        print(f"파일: {input_path}", flush=True)
+        print(f"파일 크기: {os.path.getsize(input_path) if os.path.exists(input_path) else 'N/A'} bytes", flush=True)
         for k, v in info.items():
             print(f"{k}: {v}", flush=True)
+        
+        # 400 에러에 대한 추가 분석
+        if info.get("status") == 400:
+            print(">>> [DEBUG] HTTP 400 에러 분석:", flush=True)
+            print("  - 가능한 원인: 손상된 PDF, 암호화된 PDF, 지원되지 않는 PDF 형식", flush=True)
+            print("  - 또는 Adobe API 요청 형식 오류", flush=True)
+        
         traceback.print_exc()
         print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", flush=True)
         return False, info
