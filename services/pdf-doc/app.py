@@ -519,13 +519,28 @@ def extract_pdf_content_with_adobe(pdf_path):
         print("Adobe API를 사용하여 PDF 내용을 처리했습니다.")
         return input_asset
             
-    except (ServiceApiException, ServiceUsageException, SdkException) as e:
-        print(f"Adobe API 오류: {str(e)}")
-        print("Adobe API 사용 불가 - fallback 모드로 진행합니다.")
+    except ServiceApiException as e:
+        # Adobe API 관련 에러 (가장 흔함)
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print(f"❌ Adobe ServiceApiException 발생: {e}")
+        print(f"    - Request ID: {getattr(e, 'request_id', 'N/A')}")
+        print(f"    - Status Code: {getattr(e, 'status_code', 'N/A')}")
+        print(f"    - Error Code: {getattr(e, 'error_code', 'N/A')}")
+        print(f"    - Error Message: {getattr(e, 'message', str(e))}")
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        return None
+    except (ServiceUsageException, SdkException) as e:
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print(f"❌ Adobe SDK 오류 발생: {type(e).__name__}: {str(e)}")
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         return None
     except Exception as e:
-        print(f"Adobe API 일반 오류: {str(e)}")
-        print("Adobe API 사용 불가 - fallback 모드로 진행합니다.")
+        # 그 외 모든 예상치 못한 에러
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print(f"❌ 변환 중 알 수 없는 예외 발생: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         return None
 
 def pdf_to_docx(pdf_path, output_path, quality='medium'):
@@ -582,15 +597,38 @@ def pdf_to_docx(pdf_path, output_path, quality='medium'):
             
             # 2단계: Adobe API를 사용한 PDF 내용 추출 시도
             if adobe_available and is_adobe_api_available():
-                print("Adobe API를 사용하여 PDF 처리를 시작합니다...")
-                extracted_content = extract_pdf_content_with_adobe(pdf_path)
-                if extracted_content:
-                    extracted_text = str(extracted_content)
-                    print(f"Adobe API에서 텍스트 추출 성공: {len(extracted_text)}자")
-                else:
-                    print("Adobe API 추출 실패, OCR 방법으로 진행합니다.")
+                print("✅ Adobe API로 변환을 시작합니다.")
+                try:
+                    # 이 부분이 실제 Adobe SDK를 사용하는 코드입니다.
+                    extracted_content = extract_pdf_content_with_adobe(pdf_path)
+                    if extracted_content:
+                        extracted_text = str(extracted_content)
+                        print(f"Adobe API에서 텍스트 추출 성공: {len(extracted_text)}자")
+                    else:
+                        print("Adobe API 추출 실패, OCR 방법으로 진행합니다.")
+                        
+                except ServiceApiException as e:
+                    # Adobe API 관련 에러 (가장 흔함)
+                    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                    print(f"❌ Adobe ServiceApiException 발생: {e}")
+                    print(f"    - Request ID: {getattr(e, 'request_id', 'N/A')}")
+                    print(f"    - Status Code: {getattr(e, 'status_code', 'N/A')}")
+                    print(f"    - Error Code: {getattr(e, 'error_code', 'N/A')}")
+                    print(f"    - Error Message: {getattr(e, 'message', str(e))}")
+                    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                    extracted_text = ''
+                    
+                except Exception as e:
+                    # 그 외 모든 예상치 못한 에러
+                    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                    print(f"❌ 변환 중 알 수 없는 예외 발생: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                    extracted_text = ''
             else:
-                print("Adobe API 사용 불가, OCR 방법으로 진행합니다.")
+                # Adobe API를 사용할 수 없을 때의 대체 로직
+                print("⚠️ Adobe API 사용 불가 - fallback 모드로 변환합니다.")
         
         # 기본 방법: PDF를 이미지로 변환 (품질별 최적화)
         print("PDF를 이미지로 변환 중...")
