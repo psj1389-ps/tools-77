@@ -26,6 +26,8 @@ PyMuPDF>=1.23.0,<1.25.0
 opencv-python-headless==4.9.0.80
 pytesseract==0.3.10
 
+Flask-Cors
+
 # Utilities
 qrcode>=7.4.2
 requests>=2.31.0
