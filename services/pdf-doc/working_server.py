@@ -302,9 +302,29 @@ def convert_pdf_to_docx_with_adobe(pdf_path, output_path):
         print(f"✅ Adobe SDK 4.2 변환 성공: {pdf_path} -> {output_path} (편집 가능한 DOCX)")
         return True
         
+    except ServiceApiException as api_error:
+        print(f"❌ Adobe ExportPDF ServiceApiException 발생:")
+        print(f"   - 에러 메시지: {api_error}")
+        print(f"   - 에러 타입: {type(api_error)}")
+        if hasattr(api_error, 'status_code'):
+            print(f"   - HTTP 상태 코드: {api_error.status_code}")
+        if hasattr(api_error, 'error_code'):
+            print(f"   - Adobe 에러 코드: {api_error.error_code}")
+        if hasattr(api_error, 'message'):
+            print(f"   - 상세 메시지: {api_error.message}")
+        
+        # HTTP 400 에러 특별 처리
+        if hasattr(api_error, 'status_code') and api_error.status_code == 400:
+            print("💡 HTTP 400 Bad Request - 요청 파라미터나 파일 형식을 확인해주세요")
+            print("   - PDF 파일이 손상되었거나 지원되지 않는 형식일 수 있습니다")
+            print("   - Adobe API 요청 파라미터를 확인해주세요")
+        
+        return False
+        
     except Exception as e:
         error_msg = str(e)
-        print(f"❌ Adobe ExportPDF 오류: {error_msg}")
+        print(f"❌ Adobe ExportPDF 일반 오류: {error_msg}")
+        print(f"   - 에러 타입: {type(e)}")
         
         # 구체적인 오류 메시지 분석
         if "credentials" in error_msg.lower() or "authentication" in error_msg.lower():
@@ -313,6 +333,8 @@ def convert_pdf_to_docx_with_adobe(pdf_path, output_path):
             print("💡 네트워크 오류 - 인터넷 연결 또는 Adobe 서버 상태를 확인해주세요")
         elif "file" in error_msg.lower() and "corrupt" in error_msg.lower():
             print("💡 파일 손상 오류 - PDF 파일이 손상되었을 수 있습니다")
+        elif "400" in error_msg:
+            print("💡 HTTP 400 에러 - 요청이 잘못되었거나 파일이 손상되었을 수 있습니다")
         
         return False
 
@@ -382,7 +404,16 @@ def extract_with_adobe(pdf_path):
             location = pdf_services.submit(extract_pdf_job)
             pdf_services_response = pdf_services.get_job_result(location, ExtractPDFResult)
         except ServiceApiException as api_error:
-            print(f"❌ Adobe API 오류: {api_error}")
+            print(f"❌ Adobe API ServiceApiException 발생:")
+            print(f"   - 에러 메시지: {api_error}")
+            print(f"   - 에러 타입: {type(api_error)}")
+            if hasattr(api_error, 'status_code'):
+                print(f"   - HTTP 상태 코드: {api_error.status_code}")
+            if hasattr(api_error, 'error_code'):
+                print(f"   - Adobe 에러 코드: {api_error.error_code}")
+            if hasattr(api_error, 'message'):
+                print(f"   - 상세 메시지: {api_error.message}")
+            
             # API 관련 오류 처리
             if "No result class found" in str(api_error) or "no extractable content" in str(api_error).lower():
                 print("💡 추출 가능한 텍스트가 없는 PDF (스캔된 이미지) - OCR 백업 모드로 전환")

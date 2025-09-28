@@ -477,6 +477,23 @@ class AdobeLayerConverter:
                     'extract_dir': extract_dir
                 }
                 
+            except ServiceApiException as e:
+                logging.error(f"Adobe SDK ServiceApiException 발생:")
+                logging.error(f"  - 오류 메시지: {str(e)}")
+                logging.error(f"  - 오류 타입: {type(e).__name__}")
+                if hasattr(e, 'status_code'):
+                    logging.error(f"  - HTTP 상태 코드: {e.status_code}")
+                if hasattr(e, 'error_code'):
+                    logging.error(f"  - Adobe 오류 코드: {e.error_code}")
+                if hasattr(e, 'message'):
+                    logging.error(f"  - 상세 메시지: {e.message}")
+                
+                # HTTP 400 오류에 대한 특별 처리
+                if hasattr(e, 'status_code') and e.status_code == 400:
+                    logging.error("  - HTTP 400 오류: 요청 매개변수나 파일 형식을 확인하세요")
+                
+                logging.warning("⚠️ Adobe SDK 추출 실패 - 대체 방법으로 전환")
+                # SDK 실패 시 자동으로 대체 방법 사용
             except Exception as e:
                 logging.warning(f"⚠️ Adobe SDK 추출 실패: {e} - 대체 방법으로 전환")
                 # SDK 실패 시 자동으로 대체 방법 사용

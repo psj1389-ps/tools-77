@@ -139,6 +139,22 @@ class AdobePDFConverter:
             logging.info(f"Adobe API를 사용하여 PDF를 DOCX로 성공적으로 변환했습니다: {output_path}")
             return output_path
             
+        except ServiceApiException as e:
+            logging.error(f"Adobe API ServiceApiException 발생:")
+            logging.error(f"  - 오류 메시지: {str(e)}")
+            logging.error(f"  - 오류 타입: {type(e).__name__}")
+            if hasattr(e, 'status_code'):
+                logging.error(f"  - HTTP 상태 코드: {e.status_code}")
+            if hasattr(e, 'error_code'):
+                logging.error(f"  - Adobe 오류 코드: {e.error_code}")
+            if hasattr(e, 'message'):
+                logging.error(f"  - 상세 메시지: {e.message}")
+            
+            # HTTP 400 오류에 대한 특별 처리
+            if hasattr(e, 'status_code') and e.status_code == 400:
+                logging.error("  - HTTP 400 오류: 요청 매개변수나 파일 형식을 확인하세요")
+            
+            return None
         except Exception as e:
             logging.error(f"Adobe API 변환 오류: {e}")
             # 폴백 처리
@@ -188,6 +204,22 @@ class AdobePDFConverter:
             logging.info(f"Adobe API를 사용하여 {orientation} PDF를 DOCX로 성공적으로 변환했습니다: {output_path}")
             return output_path
             
+        except ServiceApiException as e:
+            logging.error(f"Adobe API 최적화 변환 ServiceApiException 발생:")
+            logging.error(f"  - 오류 메시지: {str(e)}")
+            logging.error(f"  - 오류 타입: {type(e).__name__}")
+            if hasattr(e, 'status_code'):
+                logging.error(f"  - HTTP 상태 코드: {e.status_code}")
+            if hasattr(e, 'error_code'):
+                logging.error(f"  - Adobe 오류 코드: {e.error_code}")
+            if hasattr(e, 'message'):
+                logging.error(f"  - 상세 메시지: {e.message}")
+            
+            # HTTP 400 오류에 대한 특별 처리
+            if hasattr(e, 'status_code') and e.status_code == 400:
+                logging.error("  - HTTP 400 오류: 요청 매개변수나 파일 형식을 확인하세요")
+            
+            return None
         except Exception as e:
             logging.error(f"Adobe API 최적화 변환 오류: {e}")
             return None
@@ -236,6 +268,22 @@ class AdobePDFConverter:
             logging.info(f"Adobe API를 사용하여 공문서(신뢰도: {confidence:.2f})를 DOCX로 성공적으로 변환했습니다: {output_path}")
             return output_path
             
+        except ServiceApiException as e:
+            logging.error(f"Adobe API 공문서 변환 ServiceApiException 발생:")
+            logging.error(f"  - 오류 메시지: {str(e)}")
+            logging.error(f"  - 오류 타입: {type(e).__name__}")
+            if hasattr(e, 'status_code'):
+                logging.error(f"  - HTTP 상태 코드: {e.status_code}")
+            if hasattr(e, 'error_code'):
+                logging.error(f"  - Adobe 오류 코드: {e.error_code}")
+            if hasattr(e, 'message'):
+                logging.error(f"  - 상세 메시지: {e.message}")
+            
+            # HTTP 400 오류에 대한 특별 처리
+            if hasattr(e, 'status_code') and e.status_code == 400:
+                logging.error("  - HTTP 400 오류: 요청 매개변수나 파일 형식을 확인하세요")
+            
+            return None
         except Exception as e:
             logging.error(f"Adobe API 공문서 변환 오류: {e}")
             return None
