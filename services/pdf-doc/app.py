@@ -1691,22 +1691,37 @@ def convert_file_api():
                     quality = request.form.get('quality', 'medium')
                     print(f"PDF → DOCX 변환 시작 - {input_path} -> {output_path}")
                     
-                    if not adobe_ready:
-                        print("⚠️ Adobe API 사용 불가 - fallback 모드로 변환합니다.")
+                    # 암호화된 PDF 체크
+                    import fitz
+                    try:
+                        with fitz.open(input_path) as doc:
+                            if doc.isEncrypted:
+                                return jsonify(success=False, error="ENCRYPTED_PDF"), 400
+                    except Exception as e:
+                        print(f"PDF 암호화 체크 실패: {e}")
                     
-                    conversion_result = pdf_to_docx(input_path, output_path, quality)
+                    # ADOBE_DISABLED 환경변수 체크
+                    if os.getenv("ADOBE_DISABLED") == "true":
+                        adobe_ready = False
                     
-                    # --- 핵심 수정 부분: OCR 텍스트 추출 실패 처리 ---
-                    if conversion_result is None:
-                        # 변환 실패 (텍스트 없음)
-                        flash("PDF 파일에서 텍스트를 추출할 수 없습니다. 이미지 품질이 낮거나 텍스트가 없는 파일일 수 있습니다.")
-                        # 임시 파일 정리
-                        try:
-                            os.remove(input_path)
-                        except:
-                            pass
-                        return redirect(url_for('index'))
+                    if adobe_ready:
+                        print(">>> [DEBUG] /convert: entering Adobe branch", flush=True)
+                        from adobe_call import adobe_pdf_to_docx
+                        ok, info = adobe_pdf_to_docx(input_path, output_path)
+                        print(">>> [DEBUG] /convert: Adobe finished ok=", ok, "info=", info, flush=True)
+                        if not ok:
+                            # 1) 임시 우회: 자동 폴백
+                            print(">>> [DEBUG] /convert: fallback to pdf2docx due to Adobe error", flush=True)
+                            conversion_result = pdf_to_docx(input_path, output_path, quality)
+                            if not conversion_result:
+                                return jsonify(success=False, error="ADOBE_AND_FALLBACK_FAILED", detail=info), 400
+                            conversion_success = conversion_result
+                        else:
+                            conversion_success = True
                     else:
+                        conversion_result = pdf_to_docx(input_path, output_path, quality)
+                        if not conversion_result:
+                            return jsonify(success=False, error="PDF2DOCX_FAIL"), 400
                         conversion_success = conversion_result
                     
                 elif file_ext == 'docx':
