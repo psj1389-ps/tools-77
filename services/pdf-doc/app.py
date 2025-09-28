@@ -1,4 +1,5 @@
 from flask import Flask, request, render_template, send_file, flash, redirect, url_for, jsonify
+from flask_cors import CORS
 import os
 import tempfile
 from werkzeug.utils import secure_filename
@@ -48,7 +49,14 @@ except ImportError as e:
 # 환경 변수 로드
 load_dotenv()
 
+# 환경변수 기반 설정
+MAX_FILE_SIZE_MB = int(os.environ.get('MAX_FILE_SIZE_MB', '100'))
+ENABLE_DEBUG_LOGS = os.getenv('ENABLE_DEBUG_LOGS', 'true').lower() == 'true'
+CONVERSION_TIMEOUT = int(os.environ.get('CONVERSION_TIMEOUT_SECONDS', '300'))
+TEMP_FILE_CLEANUP = os.environ.get('TEMP_FILE_CLEANUP', 'true').lower() == 'true'
+
 app = Flask(__name__)
+CORS(app)  # CORS 설정 추가
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 max_mb = int(os.environ.get("MAX_CONTENT_LENGTH_MB", "100"))
 app.config["MAX_CONTENT_LENGTH"] = max_mb * 1024 * 1024
@@ -72,6 +80,7 @@ def env_check():
         "adobe_sdk_available": ADOBE_SDK_AVAILABLE,
         "adobe_api_ready": adobe_ready,
         "fallback_mode": not adobe_ready,
+        "conversion_method": "Adobe API" if adobe_ready else "pdf2docx + OCR",
         "environment_variables": {
             "ADOBE_CLIENT_ID": "설정됨" if os.getenv('ADOBE_CLIENT_ID') else "미설정",
             "ADOBE_CLIENT_SECRET": "설정됨" if os.getenv('ADOBE_CLIENT_SECRET') else "미설정",
@@ -79,6 +88,12 @@ def env_check():
             "ADOBE_ACCOUNT_ID": "설정됨" if os.getenv('ADOBE_ACCOUNT_ID') else "미설정",
             "ADOBE_TECHNICAL_ACCOUNT_EMAIL": "설정됨" if os.getenv('ADOBE_TECHNICAL_ACCOUNT_EMAIL') else "미설정",
             "ADOBE_PRIVATE_KEY_PATH": private_key_path
+        },
+        "app_settings": {
+            "max_file_size_mb": MAX_FILE_SIZE_MB,
+            "debug_logs_enabled": ENABLE_DEBUG_LOGS,
+            "conversion_timeout_seconds": CONVERSION_TIMEOUT,
+            "temp_file_cleanup": TEMP_FILE_CLEANUP
         },
         "config_values": {
             "client_id_length": len(os.getenv('ADOBE_CLIENT_ID', '')),
@@ -154,18 +169,31 @@ ADOBE_CONFIG = {
 def is_adobe_api_available():
     """Adobe API 사용 가능 여부 확인"""
     if not ADOBE_SDK_AVAILABLE:
+        if ENABLE_DEBUG_LOGS:
+            print("Adobe SDK가 설치되지 않음")
         return False
     
     client_id = ADOBE_CONFIG["client_credentials"]["client_id"]
     client_secret = ADOBE_CONFIG["client_credentials"]["client_secret"]
     
-    if not client_id or not client_secret:
+    has_credentials = bool(client_id and client_secret)
+    
+    if ENABLE_DEBUG_LOGS:
+        print(f"Adobe API 자격증명 상태: {'✅ 사용 가능' if has_credentials else '❌ 누락'}")
+        if not has_credentials:
+            missing = []
+            if not client_id: missing.append('ADOBE_CLIENT_ID')
+            if not client_secret: missing.append('ADOBE_CLIENT_SECRET')
+            print(f"누락된 환경변수: {', '.join(missing)}")
+    
+    if not has_credentials:
         return False
     
     # private key 파일 존재 확인 (선택사항)
     private_key_path = ADOBE_CONFIG["service_principal_credentials"]["private_key_file"]
     if private_key_path and not os.path.exists(private_key_path):
-        print(f"경고: Adobe private key 파일을 찾을 수 없습니다: {private_key_path}")
+        if ENABLE_DEBUG_LOGS:
+            print(f"경고: Adobe private key 파일을 찾을 수 없습니다: {private_key_path}")
         # private key가 없어도 일부 기능은 사용 가능할 수 있음
     
     return True
@@ -193,7 +221,7 @@ adobe_available = adobe_api_ready
 
 UPLOAD_FOLDER = 'uploads'
 OUTPUT_FOLDER = 'outputs'
-ALLOWED_EXTENSIONS = {'pdf'}
+ALLOWED_EXTENSIONS = {'pdf', 'docx', 'jpg', 'jpeg', 'png', 'gif', 'bmp'}
 
 # 폴더 생성
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -664,6 +692,14 @@ def pdf_to_docx(pdf_path, output_path, quality='medium'):
             save_debug_text(combined_ocr_text, filename_prefix + "_ocr")
         else:
             save_debug_text("텍스트 추출 실패", filename_prefix + "_no_text")
+        
+        # --- 핵심 수정 부분: OCR 텍스트 추출 실패 시 None 반환 ---
+        if not final_text.strip() and not text_blocks:
+            print(f"'{pdf_path}' 파일에서 유효한 텍스트를 찾지 못했습니다.")
+            print(f"OCR 텍스트 길이: {len(final_text)}, 텍스트 블록 수: {len(text_blocks) if text_blocks else 0}")
+            print(f"이미지 품질이 낮거나 텍스트가 없는 PDF 파일일 수 있습니다: {pdf_path}")
+            print(f"변환 품질 설정: {quality}, 이미지 수: {len(images) if 'images' in locals() else 'N/A'}")
+            return None  # 텍스트가 없으면 None을 반환
         
         if final_text or text_blocks:
             print(f"편집 가능한 텍스트 문서 생성: {len(final_text)}자")
@@ -1223,6 +1259,63 @@ def pdf_to_pptx(pdf_path, output_path, quality='medium'):
         print(f"변환 중 오류 발생: {str(e)}")
         return False
 
+def image_to_docx(image_path, output_path):
+    """이미지를 DOCX로 변환하는 함수"""
+    try:
+        print(f"이미지 → DOCX 변환 시작: {image_path} -> {output_path}")
+        
+        # 새 Word 문서 생성
+        doc = Document()
+        
+        # 이미지 열기 및 크기 확인
+        with Image.open(image_path) as img:
+            # 이미지 크기 (픽셀)
+            img_width, img_height = img.size
+            print(f"원본 이미지 크기: {img_width} x {img_height} 픽셀")
+            
+            # A4 페이지 크기 (인치)
+            page_width = 8.27  # A4 너비 (인치)
+            page_height = 11.69  # A4 높이 (인치)
+            margin = 1.0  # 여백 (인치)
+            
+            # 사용 가능한 영역
+            available_width = page_width - (2 * margin)
+            available_height = page_height - (2 * margin)
+            
+            # 이미지 비율 계산
+            img_ratio = img_width / img_height
+            available_ratio = available_width / available_height
+            
+            # 이미지 크기 조정 계산
+            if img_ratio > available_ratio:
+                # 이미지가 더 넓음 - 너비에 맞춤
+                docx_width = DocxInches(available_width)
+                docx_height = DocxInches(available_width / img_ratio)
+            else:
+                # 이미지가 더 높음 - 높이에 맞춤
+                docx_height = DocxInches(available_height)
+                docx_width = DocxInches(available_height * img_ratio)
+            
+            print(f"DOCX 이미지 크기: {docx_width.inches:.2f} x {docx_height.inches:.2f} 인치")
+        
+        # 문서에 이미지 추가
+        paragraph = doc.add_paragraph()
+        run = paragraph.runs[0] if paragraph.runs else paragraph.add_run()
+        run.add_picture(image_path, width=docx_width, height=docx_height)
+        
+        # 이미지를 중앙 정렬
+        paragraph.alignment = 1  # 중앙 정렬
+        
+        # 문서 저장
+        doc.save(output_path)
+        print(f"이미지 → DOCX 변환 완료: {output_path}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"이미지 → DOCX 변환 중 오류: {str(e)}")
+        return False
+
 def docx_to_pdf(docx_path, output_path):
     """DOCX를 PDF로 변환하는 함수"""
     try:
@@ -1287,8 +1380,251 @@ def index():
     return render_template('index.html')
 
 @app.route('/convert', methods=['POST'])
+def convert_file_api():
+    """API 방식의 파일 변환 엔드포인트"""
+    try:
+        if ENABLE_DEBUG_LOGS:
+            print("파일 업로드 요청 시작")
+            print(f"Request files: {request.files}")
+            print(f"Request form: {request.form}")
+            print(f"Request content type: {request.content_type}")
+        
+        # 환경변수 기반 설정 확인
+        adobe_ready = is_adobe_api_available()
+        conversion_method = "Adobe API" if adobe_ready else "pdf2docx + OCR"
+        if ENABLE_DEBUG_LOGS:
+            print(f"사용할 변환 방법: {conversion_method}")
+        
+        # 1단계: 파일 존재 여부 확인
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False, 
+                'error': '파일이 선택되지 않았습니다.',
+                'conversion_method': conversion_method
+            }), 400
+        
+        file = request.files['file']
+        
+        # 2단계: 파일명 확인
+        if not file or file.filename == '' or file.filename is None:
+            return jsonify({
+                'success': False, 
+                'error': '파일이 선택되지 않았습니다.',
+                'conversion_method': conversion_method
+            }), 400
+        
+        # 3단계: 파일 내용 및 크기 확인
+        try:
+            file.seek(0, 2)
+            file_size = file.tell()
+            file.seek(0)
+            
+            if file_size == 0:
+                return jsonify({
+                    'success': False, 
+                    'error': '업로드된 파일이 비어있습니다.',
+                    'conversion_method': conversion_method
+                }), 400
+            
+            if file_size < 10:
+                return jsonify({
+                    'success': False, 
+                    'error': '파일이 너무 작습니다.',
+                    'conversion_method': conversion_method
+                }), 400
+            
+            max_size = MAX_FILE_SIZE_MB * 1024 * 1024
+            if file_size > max_size:
+                return jsonify({
+                    'success': False, 
+                    'error': f'파일 크기가 너무 큽니다. (최대: {max_size//(1024*1024)}MB)',
+                    'conversion_method': conversion_method
+                }), 400
+            
+            print(f"파일 크기: {file_size // (1024*1024) if file_size >= 1024*1024 else file_size // 1024}{'MB' if file_size >= 1024*1024 else 'KB'}")
+            
+            # 4단계: 파일 형식 검증
+            file_content = file.read(10)
+            file.seek(0)
+            
+            file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+            
+            # 파일 형식별 검증
+            if file_ext == 'pdf' and not file_content.startswith(b'%PDF-'):
+                return jsonify({
+                    'success': False, 
+                    'error': '올바른 PDF 파일이 아닙니다.',
+                    'conversion_method': conversion_method
+                }), 400
+            
+        except Exception as e:
+            print(f"파일 검증 중 오류: {str(e)}")
+            return jsonify({
+                'success': False, 
+                'error': f'파일 검증 중 오류가 발생했습니다: {str(e)}',
+                'conversion_method': conversion_method
+            }), 400
+        
+        # 5단계: 파일 처리
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            
+            if '.' not in filename:
+                return jsonify({
+                    'success': False, 
+                    'error': '파일 확장자가 없습니다.',
+                    'conversion_method': conversion_method
+                }), 400
+            
+            file_ext = filename.rsplit('.', 1)[1].lower()
+            if file_ext not in ALLOWED_EXTENSIONS:
+                return jsonify({
+                    'success': False, 
+                    'error': '지원되는 파일 형식: PDF, DOCX, JPG, JPEG, PNG, GIF, BMP',
+                    'conversion_method': conversion_method
+                }), 400
+            
+            # 파일 저장
+            import time
+            timestamp = str(int(time.time()))
+            safe_filename = f"{timestamp}_{filename}"
+            input_path = os.path.join(UPLOAD_FOLDER, safe_filename)
+            
+            try:
+                os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+                file.save(input_path)
+                
+                saved_file_size = os.path.getsize(input_path)
+                if saved_file_size == 0:
+                    os.remove(input_path)
+                    return jsonify({
+                        'success': False, 
+                        'error': '파일 저장 중 오류가 발생했습니다.',
+                        'conversion_method': conversion_method
+                    }), 500
+                
+                print(f"파일 저장 완료 - 크기: {saved_file_size}바이트")
+            except Exception as e:
+                print(f"파일 저장 오류: {str(e)}")
+                return jsonify({
+                    'success': False, 
+                    'error': f'파일 저장 중 오류가 발생했습니다: {str(e)}',
+                    'conversion_method': conversion_method
+                }), 500
+            
+            # 변환 처리
+            conversion_success = False
+            output_path = None
+            
+            try:
+                if file_ext == 'pdf':
+                    # PDF → DOCX 변환
+                    base_filename = filename.rsplit('.', 1)[0] if '.' in filename else filename
+                    output_filename = base_filename + '.docx'
+                    output_path = os.path.join(OUTPUT_FOLDER, output_filename)
+                    
+                    quality = request.form.get('quality', 'medium')
+                    print(f"PDF → DOCX 변환 시작 - {input_path} -> {output_path}")
+                    
+                    if not adobe_ready:
+                        print("⚠️ Adobe API 사용 불가 - fallback 모드로 변환합니다.")
+                    
+                    conversion_result = pdf_to_docx(input_path, output_path, quality)
+                    
+                    # --- 핵심 수정 부분: OCR 텍스트 추출 실패 처리 ---
+                    if conversion_result is None:
+                        # 변환 실패 (텍스트 없음)
+                        flash("PDF 파일에서 텍스트를 추출할 수 없습니다. 이미지 품질이 낮거나 텍스트가 없는 파일일 수 있습니다.")
+                        # 임시 파일 정리
+                        try:
+                            os.remove(input_path)
+                        except:
+                            pass
+                        return redirect(url_for('index'))
+                    else:
+                        conversion_success = conversion_result
+                    
+                elif file_ext == 'docx':
+                    # DOCX → PDF 변환
+                    base_filename = filename.rsplit('.', 1)[0] if '.' in filename else filename
+                    output_filename = base_filename + '.pdf'
+                    output_path = os.path.join(OUTPUT_FOLDER, output_filename)
+                    
+                    print(f"DOCX → PDF 변환 시작 - {input_path} -> {output_path}")
+                    conversion_success = docx_to_pdf(input_path, output_path)
+                    
+                elif file_ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp']:
+                    # 이미지 → DOCX 변환
+                    base_filename = filename.rsplit('.', 1)[0] if '.' in filename else filename
+                    output_filename = base_filename + '.docx'
+                    output_path = os.path.join(OUTPUT_FOLDER, output_filename)
+                    
+                    print(f"이미지 → DOCX 변환 시작 - {input_path} -> {output_path}")
+                    conversion_success = image_to_docx(input_path, output_path)
+                
+                # 변환 결과 처리
+                if conversion_success:
+                    print("변환 성공 - 다운로드 준비")
+                    
+                    # 임시 파일 정리
+                    try:
+                        os.remove(input_path)
+                        print("임시 파일 삭제 완료")
+                    except Exception as e:
+                        print(f"임시 파일 삭제 실패 (무시됨): {e}")
+                    
+                    # 파일 다운로드 제공
+                    try:
+                        print("파일 다운로드 시작")
+                        return send_file(output_path, as_attachment=True, download_name=output_filename)
+                    except Exception as e:
+                        print(f"파일 다운로드 오류: {str(e)}")
+                        return jsonify({
+                            'success': False, 
+                            'error': f'파일 다운로드 중 오류가 발생했습니다: {str(e)}',
+                            'conversion_method': conversion_method
+                        }), 500
+                else:
+                    print("변환 실패 - 정리 작업")
+                    
+                    # 실패한 파일들 정리
+                    for cleanup_path in [input_path, output_path]:
+                        try:
+                            if cleanup_path and os.path.exists(cleanup_path):
+                                os.remove(cleanup_path)
+                        except Exception as e:
+                            print(f"파일 정리 실패 (무시됨): {e}")
+                    
+                    return jsonify({
+                        'success': False, 
+                        'error': '파일 변환에 실패했습니다.',
+                        'conversion_method': conversion_method
+                    }), 500
+                    
+            except Exception as e:
+                print(f"변환 중 예외 발생: {str(e)}")
+                return jsonify({
+                    'success': False, 
+                    'error': f'변환 중 오류가 발생했습니다: {str(e)}',
+                    'conversion_method': conversion_method
+                }), 500
+        else:
+            return jsonify({
+                'success': False, 
+                'error': '지원되지 않는 파일 형식입니다.',
+                'conversion_method': conversion_method
+            }), 400
+            
+    except Exception as e:
+        print(f"업로드 처리 중 예외 발생: {str(e)}")
+        return jsonify({
+            'success': False, 
+            'error': f'파일 처리 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
+    """기존 웹 인터페이스용 업로드 (리다이렉트 방식)"""
     try:
         print("파일 업로드 요청 시작")
         
@@ -1327,12 +1663,33 @@ def upload_file():
             
             print(f"파일 크기: {file_size // (1024*1024) if file_size >= 1024*1024 else file_size // 1024}{'MB' if file_size >= 1024*1024 else 'KB'}")
             
-            # 4단계: PDF 파일 헤더 검증
+            # 4단계: 파일 형식 검증
             file_content = file.read(10)  # 처음 10바이트 읽기
             file.seek(0)  # 다시 처음으로 이동
             
-            if not file_content.startswith(b'%PDF-'):
+            # 파일 확장자 확인 (filename을 file.filename으로 수정)
+            file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+            
+            # PDF 파일 검증
+            if file_ext == 'pdf' and not file_content.startswith(b'%PDF-'):
                 flash('올바른 PDF 파일이 아닙니다. PDF 파일을 선택해주세요.')
+                return redirect(url_for('index'))
+            
+            # 이미지 파일 검증 (기본적인 헤더 체크)
+            elif file_ext in ['jpg', 'jpeg'] and not (file_content.startswith(b'\xff\xd8\xff') or file_content.startswith(b'\xff\xd8')):
+                flash('올바른 JPEG 파일이 아닙니다.')
+                return redirect(url_for('index'))
+            
+            elif file_ext == 'png' and not file_content.startswith(b'\x89PNG\r\n\x1a\n'):
+                flash('올바른 PNG 파일이 아닙니다.')
+                return redirect(url_for('index'))
+            
+            elif file_ext == 'gif' and not (file_content.startswith(b'GIF87a') or file_content.startswith(b'GIF89a')):
+                flash('올바른 GIF 파일이 아닙니다.')
+                return redirect(url_for('index'))
+            
+            elif file_ext == 'bmp' and not file_content.startswith(b'BM'):
+                flash('올바른 BMP 파일이 아닙니다.')
                 return redirect(url_for('index'))
                 
         except Exception as e:
@@ -1350,8 +1707,8 @@ def upload_file():
                 return redirect(url_for('index'))
             
             file_ext = filename.rsplit('.', 1)[1].lower()
-            if file_ext != 'pdf':
-                flash('PDF 파일만 업로드 가능합니다.')
+            if file_ext not in ALLOWED_EXTENSIONS:
+                flash('지원되는 파일 형식: PDF, DOCX, JPG, JPEG, PNG, GIF, BMP')
                 return redirect(url_for('index'))
             
             # 안전한 파일명 생성 (타임스탬프 추가로 중복 방지)
@@ -1394,7 +1751,23 @@ def upload_file():
                 print(f"PDF → DOCX 변환 시작 - {input_path} -> {output_path}")
                 
                 try:
-                    conversion_success = pdf_to_docx(input_path, output_path, quality)
+                    conversion_result = pdf_to_docx(input_path, output_path, quality)
+                    
+                    # --- 핵심 수정 부분: OCR 텍스트 추출 실패 처리 ---
+                    if conversion_result is None:
+                        # 변환 실패 (텍스트 없음)
+                        # 임시 파일 정리
+                        try:
+                            os.remove(input_path)
+                        except:
+                            pass
+                        return jsonify({
+                            'success': False, 
+                            'error': 'PDF 파일에서 텍스트를 추출할 수 없습니다. 이미지 품질이 낮거나 텍스트가 없는 파일일 수 있습니다.',
+                            'conversion_method': conversion_method
+                        }), 400
+                    else:
+                        conversion_success = conversion_result
                 except Exception as e:
                     print(f"변환 중 예외 발생: {str(e)}")
                     flash(f'변환 중 오류가 발생했습니다: {str(e)}')
@@ -1410,6 +1783,21 @@ def upload_file():
                 
                 try:
                     conversion_success = docx_to_pdf(input_path, output_path)
+                except Exception as e:
+                    print(f"변환 중 예외 발생: {str(e)}")
+                    flash(f'변환 중 오류가 발생했습니다: {str(e)}')
+                    
+            elif file_ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp']:
+                # 이미지 → DOCX 변환
+                # 파일명에서 확장자 제거 (안전하게)
+                base_filename = filename.rsplit('.', 1)[0] if '.' in filename else filename
+                output_filename = base_filename + '.docx'
+                output_path = os.path.join(OUTPUT_FOLDER, output_filename)
+                
+                print(f"이미지 → DOCX 변환 시작 - {input_path} -> {output_path}")
+                
+                try:
+                    conversion_success = image_to_docx(input_path, output_path)
                 except Exception as e:
                     print(f"변환 중 예외 발생: {str(e)}")
                     flash(f'변환 중 오류가 발생했습니다: {str(e)}')

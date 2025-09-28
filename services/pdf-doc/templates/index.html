@@ -350,6 +350,17 @@
     </style>
 </head>
 <body>
+    <!-- Flash 메시지 표시 영역 -->
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="alert alert-warning" role="alert" style="margin: 20px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; color: #856404; font-weight: 500;">
+          {% for message in messages %}
+            <div style="margin-bottom: 5px;">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
     <!-- 🔥 헤더 섹션 (1번 그림 스타일) -->
     <header class="main-header">
         <div class="header-content">
