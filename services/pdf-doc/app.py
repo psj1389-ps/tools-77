@@ -587,6 +587,37 @@ def convert_pdf_to_docx_with_adobe_direct(pdf_path, output_path):
         traceback.print_exc()
         return False
 
+def adobe_pdf_to_docx(input_path, output_path):
+    """사용자 요청에 따른 Adobe API PDF to DOCX 변환 함수"""
+    print(">>> [DEBUG] adobe_pdf_to_docx 함수가 시작되었습니다.")  # <--- 이 줄을 함수 가장 처음에 추가!
+    try:
+        print(">>> [DEBUG] adobe_pdf_to_docx: try 블록 진입. SDK 초기화 시도.")
+        
+        # Adobe API 변환 실행
+        result = convert_pdf_to_docx_with_adobe_direct(input_path, output_path)
+        
+        if result:
+            print(">>> [DEBUG] adobe_pdf_to_docx: execute() 성공.")
+            return True
+        else:
+            print(">>> [DEBUG] adobe_pdf_to_docx: execute() 실패.")
+            return False
+            
+    except ServiceApiException as e:
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print(f"❌ Adobe ServiceApiException: {e.message if hasattr(e, 'message') else str(e)}")
+        print(f"    - Status Code: {e.status_code if hasattr(e, 'status_code') else 'N/A'}, Error Code: {e.error_code if hasattr(e, 'error_code') else 'N/A'}")
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        return False
+        
+    except Exception as e:
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print(f"❌ adobe_pdf_to_docx에서 예외 발생: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        return False
+
 def extract_pdf_content_with_adobe(pdf_path):
     """Adobe PDF Services API를 사용하여 PDF 내용을 추출하는 함수"""
     if not ADOBE_SDK_AVAILABLE:
@@ -653,32 +684,22 @@ def pdf_to_docx(pdf_path, output_path, quality='medium'):
         
         # 1단계: Adobe API를 최우선으로 시도
         if adobe_available and is_adobe_api_available():
-            print("=== 1단계: Adobe API 변환 시도 ===")
-            print("✅ Adobe API로 변환을 시작합니다.")
+            print(">>> [DEBUG] Adobe 분기 진입. adobe_pdf_to_docx 함수 호출 시도.")
             try:
-                # Adobe SDK를 사용한 직접 PDF to DOCX 변환 시도
-                adobe_result = convert_pdf_to_docx_with_adobe_direct(pdf_path, output_path)
-                if adobe_result:
-                    print(f"Adobe API 변환 성공: {output_path} (크기: {os.path.getsize(output_path)} bytes)")
+                conversion_success = adobe_pdf_to_docx(pdf_path, output_path)
+                print(">>> [DEBUG] adobe_pdf_to_docx 함수 정상 종료. 결과:", conversion_success)
+                if conversion_success:
                     return True
                 else:
                     print("Adobe API 직접 변환 실패, Extract API로 시도...")
                     
-            except ServiceApiException as e:
-                print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-                print(f"❌ Adobe ServiceApiException 발생: {e}")
-                print(f"    - Request ID: {getattr(e, 'request_id', 'N/A')}")
-                print(f"    - Status Code: {getattr(e, 'status_code', 'N/A')}")
-                print(f"    - Error Code: {getattr(e, 'error_code', 'N/A')}")
-                print(f"    - Error Message: {getattr(e, 'message', str(e))}")
-                print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-                
             except Exception as e:
                 print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-                print(f"❌ Adobe API 변환 중 알 수 없는 예외 발생: {str(e)}")
+                print(f"❌ /convert 라우트에서 예외 발생: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                conversion_success = False
         else:
             print("⚠️ Adobe API 사용 불가 - fallback 모드로 변환합니다.")
             if not ADOBE_SDK_AVAILABLE:
