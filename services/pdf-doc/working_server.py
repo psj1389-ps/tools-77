@@ -83,11 +83,10 @@ def serve_assets(filename):
     """정적 자산 파일 서빙"""
     return send_file(os.path.join('static', 'assets', filename))
 
-# Adobe PDF Services API 설정 - 환경변수에서 가져오기
+# Adobe PDF Services API 설정 - OAuth Server-to-Server 방식
 ADOBE_CLIENT_ID = os.getenv("ADOBE_CLIENT_ID")
 ADOBE_CLIENT_SECRET = os.getenv("ADOBE_CLIENT_SECRET")
 ADOBE_ORGANIZATION_ID = os.getenv("ADOBE_ORGANIZATION_ID")
-ADOBE_PRIVATE_KEY_PATH = os.getenv("ADOBE_PRIVATE_KEY_PATH", "private_key.pem")
 
 # 폴더 생성
 UPLOAD_FOLDER = 'uploads'

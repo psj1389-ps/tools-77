@@ -72,10 +72,6 @@ def env_check():
     # Adobe API 사용 가능성 확인
     adobe_ready = is_adobe_api_available()
     
-    # Private key 파일 상태 확인
-    private_key_path = get_adobe_private_key_path()
-    private_key_exists = os.path.exists(private_key_path) if private_key_path else False
-    
     env_status = {
         "adobe_sdk_available": ADOBE_SDK_AVAILABLE,
         "adobe_api_ready": adobe_ready,
@@ -86,8 +82,7 @@ def env_check():
             "ADOBE_CLIENT_SECRET": "설정됨" if os.getenv('ADOBE_CLIENT_SECRET') else "미설정",
             "ADOBE_ORGANIZATION_ID": "설정됨" if os.getenv('ADOBE_ORGANIZATION_ID') else "미설정",
             "ADOBE_ACCOUNT_ID": "설정됨" if os.getenv('ADOBE_ACCOUNT_ID') else "미설정",
-            "ADOBE_TECHNICAL_ACCOUNT_EMAIL": "설정됨" if os.getenv('ADOBE_TECHNICAL_ACCOUNT_EMAIL') else "미설정",
-            "ADOBE_PRIVATE_KEY_PATH": private_key_path
+            "ADOBE_TECHNICAL_ACCOUNT_EMAIL": "설정됨" if os.getenv('ADOBE_TECHNICAL_ACCOUNT_EMAIL') else "미설정"
         },
         "app_settings": {
             "max_file_size_mb": MAX_FILE_SIZE_MB,
@@ -100,20 +95,17 @@ def env_check():
             "client_secret_length": len(os.getenv('ADOBE_CLIENT_SECRET', '')),
             "organization_id_length": len(os.getenv('ADOBE_ORGANIZATION_ID', ''))
         },
-        "file_status": {
-            "private_key_exists": private_key_exists,
-            "private_key_path": private_key_path
-        },
+        "authentication_method": "OAuth Server-to-Server",
         "service_status": {
             "pdf2docx_available": True,  # 항상 사용 가능
             "ocr_available": True,       # 항상 사용 가능
             "image_conversion_available": True  # 항상 사용 가능
         },
-        "recommendations": get_environment_recommendations(adobe_ready, private_key_exists)
+        "recommendations": get_environment_recommendations(adobe_ready)
     }
     return jsonify(env_status)
 
-def get_environment_recommendations(adobe_ready, private_key_exists):
+def get_environment_recommendations(adobe_ready):
     """환경 설정에 대한 권장사항 제공"""
     recommendations = []
     
@@ -125,31 +117,13 @@ def get_environment_recommendations(adobe_ready, private_key_exists):
             recommendations.append("로컬 개발: .env 파일에 Adobe API 키를 추가하세요.")
             recommendations.append("배포 환경: 환경변수로 Adobe API 키를 설정하세요.")
     
-    if adobe_ready and not private_key_exists:
-        recommendations.append("Private key 파일이 없습니다. 일부 Adobe API 기능이 제한될 수 있습니다.")
-    
     if not recommendations:
-        recommendations.append("모든 설정이 올바르게 구성되었습니다!")
+        recommendations.append("모든 설정이 올바르게 구성되었습니다! (OAuth Server-to-Server 인증 사용)")
     
     return recommendations
 
 # Adobe PDF Services API 설정 - 환경변수에서 로드
-def get_adobe_private_key_path():
-    """Adobe private key 파일 경로를 환경에 맞게 반환"""
-    private_key_path = os.getenv('ADOBE_PRIVATE_KEY_PATH', 'private.key')
-    
-    # Render 환경에서는 절대 경로 사용
-    if private_key_path.startswith('/etc/secrets/'):
-        return private_key_path
-    
-    # 로컬 환경에서는 상대 경로 또는 현재 디렉토리 기준
-    if not os.path.isabs(private_key_path):
-        # 현재 스크립트 디렉토리 기준으로 경로 설정
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        local_path = os.path.join(script_dir, private_key_path)
-        return local_path
-    
-    return private_key_path
+# Adobe private key path function removed for OAuth Server-to-Server authentication
 
 ADOBE_CONFIG = {
     "client_credentials": {
@@ -160,7 +134,6 @@ ADOBE_CONFIG = {
         "organization_id": os.getenv('ADOBE_ORGANIZATION_ID', ''),
         "account_id": os.getenv('ADOBE_ACCOUNT_ID', ''),
         "technical_account_email": os.getenv('ADOBE_TECHNICAL_ACCOUNT_EMAIL', ''),
-        "private_key_file": get_adobe_private_key_path(),
         "access_token": ''  # 동적으로 생성되어야 함
     }
 }
@@ -189,12 +162,7 @@ def is_adobe_api_available():
     if not has_credentials:
         return False
     
-    # private key 파일 존재 확인 (선택사항)
-    private_key_path = ADOBE_CONFIG["service_principal_credentials"]["private_key_file"]
-    if private_key_path and not os.path.exists(private_key_path):
-        if ENABLE_DEBUG_LOGS:
-            print(f"경고: Adobe private key 파일을 찾을 수 없습니다: {private_key_path}")
-        # private key가 없어도 일부 기능은 사용 가능할 수 있음
+    # OAuth Server-to-Server authentication - no private key file needed
     
     return True
 
@@ -204,8 +172,7 @@ adobe_api_ready = is_adobe_api_available()
 
 if adobe_api_ready:
     client_id = ADOBE_CONFIG['client_credentials']['client_id']
-    print(f"✅ Adobe API 준비 완료: {client_id[:8]}...")
-    print(f"Private Key 경로: {ADOBE_CONFIG['service_principal_credentials']['private_key_file']}")
+    print(f"✅ Adobe API 준비 완료 (OAuth Server-to-Server): {client_id[:8]}...")
 else:
     print("⚠️ Adobe API 사용 불가 - fallback 모드로 작동합니다.")
     if not ADOBE_SDK_AVAILABLE:
