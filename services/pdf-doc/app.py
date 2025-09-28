@@ -508,9 +508,7 @@ def convert_pdf_to_docx_with_adobe_direct(pdf_path, output_path):
         # ServicePrincipalCredentials 생성 (OAuth Server-to-Server)
         credentials = ServicePrincipalCredentials(
             client_id=client_id,
-            client_secret=client_secret,
-            organization_id=organization_id,
-            account_id=account_id
+            client_secret=client_secret
         )
         
         # PDFServices 인스턴스 생성
@@ -577,9 +575,7 @@ def extract_pdf_content_with_adobe(pdf_path):
         # Adobe API 자격 증명 설정 (올바른 클래스 사용)
         credentials = ServicePrincipalCredentials(
             client_id=client_id,
-            client_secret=client_secret,
-            organization_id=os.environ.get("ADOBE_ORGANIZATION_ID"),
-            account_id=os.environ.get("ADOBE_ACCOUNT_ID")
+            client_secret=client_secret
         )
         
         # PDF Services 인스턴스 생성

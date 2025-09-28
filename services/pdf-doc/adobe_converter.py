@@ -31,9 +31,7 @@ class AdobePDFConverter:
             # 자격 증명 설정 (SDK 4.2 호환)
             credentials = ServicePrincipalCredentials(
                 client_id=os.getenv('ADOBE_CLIENT_ID'),
-                client_secret=os.getenv('ADOBE_CLIENT_SECRET'),
-                organization_id=os.getenv('ADOBE_ORGANIZATION_ID'),
-                account_id=os.getenv('ADOBE_ACCOUNT_ID')
+                client_secret=os.getenv('ADOBE_CLIENT_SECRET')
             )
             
             # PDF Services API 초기화

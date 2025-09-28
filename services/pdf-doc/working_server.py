@@ -192,9 +192,7 @@ def convert_pdf_to_docx_with_adobe(pdf_path, output_path):
         # ServicePrincipalCredentials 사용 (SDK 4.2 올바른 방식)
         credentials = ServicePrincipalCredentials(
             client_id=client_id,
-            client_secret=client_secret,
-            organization_id=os.environ.get("ADOBE_ORGANIZATION_ID"),
-            account_id=os.environ.get("ADOBE_ACCOUNT_ID")
+            client_secret=client_secret
         )
         
         # 2. PDF Services 클라이언트 생성
@@ -349,9 +347,7 @@ def extract_with_adobe(pdf_path):
         # ServicePrincipalCredentials 사용 (SDK 4.2 정확한 클래스)
         credentials = ServicePrincipalCredentials(
             client_id=client_id,
-            client_secret=client_secret,
-            organization_id=os.environ.get("ADOBE_ORGANIZATION_ID"),
-            account_id=os.environ.get("ADOBE_ACCOUNT_ID")
+            client_secret=client_secret
         )
         
         # PDF Services 클라이언트 생성
