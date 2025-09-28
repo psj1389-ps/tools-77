@@ -402,6 +402,7 @@ def adobe_pdf_to_docx(input_path: str, output_path: str):
             account_id=os.environ["ADOBE_ACCOUNT_ID"],
         )
         pdf_services = PDFServices(credentials=creds)
+
         with open(input_path, "rb") as f:
             input_bytes = f.read()
 
@@ -1736,9 +1737,9 @@ def convert_file_api():
             
             try:
                 if file_ext == 'pdf':
-                    # PDF → DOCX 변환
-                    base_filename = filename.rsplit('.', 1)[0] if '.' in filename else filename
-                    output_filename = base_filename + '.docx'
+                    # PDF → DOCX 변환 - 출력 파일명 미리 고정
+                    base = filename.rsplit(".", 1)[0] if "." in filename else filename
+                    output_filename = base + ".docx"
                     output_path = os.path.join(OUTPUT_FOLDER, output_filename)
                     
                     quality = request.form.get('quality', 'medium')
@@ -1758,12 +1759,10 @@ def convert_file_api():
                         adobe_ready = False
                     
                     if adobe_ready:
-                        print(">>> [DEBUG] /convert: Adobe branch", flush=True)
+                        print(">>> [DEBUG] image-only or vector PDF detected -> try Adobe first", flush=True)
                         ok, info = adobe_pdf_to_docx(input_path, output_path)
-                        print(">>> [DEBUG] /convert: Adobe finished ok=", ok, "info=", info, flush=True)
                         if not ok:
-                            # 임시 우회: 자동 폴백
-                            print(">>> [DEBUG] /convert: fallback to pdf2docx", flush=True)
+                            print(">>> [DEBUG] Adobe failed -> fallback to pdf2docx/image_to_docx", flush=True)
                             ok = pdf_to_docx(input_path, output_path, quality)
                             if not ok:
                                 return jsonify(success=False, error="ADOBE_AND_FALLBACK_FAILED", detail=info), 400
