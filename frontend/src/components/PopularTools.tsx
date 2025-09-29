@@ -5,11 +5,11 @@ const PopularTools = () => {
     { name: '모든 도구', targetId: 'all-tools' },
     { name: 'PDF변환도구', targetId: 'pdf-tools' },
     { name: '이미지도구', targetId: 'image-tools' },
-    { name: 'AI', featured: true, targetId: 'ai-tools' },
-    { name: '이미지 편집', targetId: 'image-conversion-tools' },
+    { name: 'AI도구', featured: true, targetId: 'ai-tools' },
+    { name: '이미지변환도구', targetId: 'image-conversion-tools' },
     { name: '문서도구', targetId: 'document-tools' },
-    { name: 'YOUTUBE', targetId: 'youtube-tools' },
-    { name: '동영상 편집', targetId: 'video-tools' },
+    { name: 'YOUTUBE도구', targetId: 'youtube-tools' },
+    { name: '동영상도구', targetId: 'video-tools' },
   ];
 
   const scrollToSection = (targetId: string) => {
