@@ -12,24 +12,24 @@ const Hero = () => {
             <span className="block text-blue-600">77+ Popular Tools</span>
           </h1>
 
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-8">
-            가장 많이 사용되는 필수 온라인 도구와 AI를 만나보세요.<br />
-            누구나 자유롭게 무료로 사용하세요.
-          </p>
+          <p className="text-2xl font-bold text-gray-600 max-w-2xl mx-auto mb-8">
+          가장 많이 사용되는 필수 온라인 도구와 AI를 만나보세요.<br />
+          누구나 자유롭게 무료로 사용하세요.
+        </p>
 
           <div className="flex justify-center space-x-8 text-gray-700">
             <div className="flex items-center space-x-2">
-              <span className="w-3 h-3 bg-blue-400 rounded-full"></span>
-              <span>무료 온라인 도구</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="w-3 h-3 bg-blue-400 rounded-full"></span>
-              <span>간편한 교환 형식</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="w-3 h-3 bg-blue-400 rounded-full"></span>
-              <span>누구나 쉬운 기능</span>
-            </div>
+                <span className="w-3 h-3 bg-blue-400 rounded-full"></span>
+                <span className="font-bold">무료 온라인 도구</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="w-3 h-3 bg-blue-400 rounded-full"></span>
+                <span className="font-bold">간편한 교환 형식</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="w-3 h-3 bg-blue-400 rounded-full"></span>
+                <span className="font-bold">누구나 쉬운 기능</span>
+              </div>
           </div>
         </div>
       </div>

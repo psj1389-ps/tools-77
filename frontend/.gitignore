@@ -22,10 +22,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
-
-.vercel
-.env*
-npm-debug.log*
-yarn*.log
-pnpm*.log

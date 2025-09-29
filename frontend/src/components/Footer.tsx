@@ -57,8 +57,12 @@ const Footer = () => {
           {/* 브랜드 섹션 */}
           <div className="lg:col-span-2">
             <Link to="/" className="flex items-center space-x-2 mb-4">
-              <div className="bg-blue-600 p-2 rounded-lg">
-                <Wrench className="h-6 w-6 text-white" />
+              <div className="w-12 h-12 rounded-full overflow-hidden">
+                <img 
+                  src="https://trae-api-sg.mchost.guru/api/ide/v1/text_to_image?prompt=circular%20purple%20logo%20with%20white%20text%20%2277%20TOOLS%22%20modern%20design%20clean%20typography&image_size=square" 
+                  alt="77 TOOLS Logo" 
+                  className="w-full h-full object-cover"
+                />
               </div>
               <span className="text-xl font-bold text-white">
                 77+ Popular Tools
