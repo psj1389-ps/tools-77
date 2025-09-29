@@ -1733,16 +1733,42 @@ def convert_file_api():
         
         # 5단계: 파일 처리
         if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
+            # 원본 파일명에서 확장자 추출
+            original_filename = file.filename
+            print(f"🔍 원본 파일명: '{original_filename}'")
             
-            if '.' not in filename:
+            # 확장자 추출 (원본 파일명에서)
+            if '.' not in original_filename:
                 return jsonify({
                     'success': False, 
                     'error': '파일 확장자가 없습니다.',
                     'conversion_method': conversion_method
                 }), 400
             
-            file_ext = filename.rsplit('.', 1)[1].lower()
+            file_ext = original_filename.rsplit('.', 1)[1].lower()
+            print(f"🔍 추출된 확장자: '{file_ext}'")
+            
+            # 안전한 파일명 생성 (한글 파일명 처리)
+            import re
+            import unicodedata
+            
+            # 원본 파일명에서 확장자 제거
+            base_name = original_filename.rsplit('.', 1)[0]
+            
+            # 한글 파일명을 안전하게 처리
+            # 1. 유니코드 정규화
+            normalized_name = unicodedata.normalize('NFC', base_name)
+            # 2. 안전하지 않은 문자 제거 (경로 구분자, 특수문자 등)
+            safe_name = re.sub(r'[<>:"/\\|?*]', '_', normalized_name)
+            # 3. 연속된 공백을 하나로 변경
+            safe_name = re.sub(r'\s+', '_', safe_name.strip())
+            # 4. 빈 문자열이면 기본값 사용
+            if not safe_name or safe_name == '_':
+                safe_name = 'file'
+            
+            # 최종 파일명 생성
+            filename = f"{safe_name}.{file_ext}"
+            print(f"🔍 최종 안전한 파일명: '{filename}'")
             if file_ext not in ALLOWED_EXTENSIONS:
                 return jsonify({
                     'success': False, 
@@ -1975,14 +2001,39 @@ def upload_file():
         
         # 5단계: 파일 형식 확인 및 처리 (강화된 검증)
         if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
+            # 원본 파일명에서 확장자 추출
+            original_filename = file.filename
+            print(f"🔍 [upload] 원본 파일명: '{original_filename}'")
             
-            # 파일 확장자 안전하게 추출 (list index out of range 오류 방지)
-            if '.' not in filename:
+            # 확장자 추출 (원본 파일명에서)
+            if '.' not in original_filename:
                 flash('파일 확장자가 없습니다. PDF 파일을 선택해주세요.')
                 return redirect(url_for('index'))
             
-            file_ext = filename.rsplit('.', 1)[1].lower()
+            file_ext = original_filename.rsplit('.', 1)[1].lower()
+            print(f"🔍 [upload] 추출된 확장자: '{file_ext}'")
+            
+            # 안전한 파일명 생성 (한글 파일명 처리)
+            import re
+            import unicodedata
+            
+            # 원본 파일명에서 확장자 제거
+            base_name = original_filename.rsplit('.', 1)[0]
+            
+            # 한글 파일명을 안전하게 처리
+            # 1. 유니코드 정규화
+            normalized_name = unicodedata.normalize('NFC', base_name)
+            # 2. 안전하지 않은 문자 제거 (경로 구분자, 특수문자 등)
+            safe_name = re.sub(r'[<>:"/\\|?*]', '_', normalized_name)
+            # 3. 연속된 공백을 하나로 변경
+            safe_name = re.sub(r'\s+', '_', safe_name.strip())
+            # 4. 빈 문자열이면 기본값 사용
+            if not safe_name or safe_name == '_':
+                safe_name = 'file'
+            
+            # 최종 파일명 생성
+            filename = f"{safe_name}.{file_ext}"
+            print(f"🔍 [upload] 최종 안전한 파일명: '{filename}'")
             if file_ext not in ALLOWED_EXTENSIONS:
                 flash('지원되는 파일 형식: PDF, DOCX, JPG, JPEG, PNG, GIF, BMP')
                 return redirect(url_for('index'))
