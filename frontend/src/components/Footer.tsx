@@ -191,12 +191,7 @@ const Footer = () => {
               </Link>
             </div>
 
-            {/* Made with love */}
-            <div className="flex items-center space-x-1 text-gray-400 text-sm">
-              <span>Made with</span>
-              <Heart className="w-4 h-4 text-blue-500 fill-current" />
-              <span>in Korea</span>
-            </div>
+
           </div>
         </div>
       </div>
