@@ -57,7 +57,7 @@ CONVERSION_TIMEOUT = int(os.environ.get('CONVERSION_TIMEOUT_SECONDS', '300'))
 TEMP_FILE_CLEANUP = os.environ.get('TEMP_FILE_CLEANUP', 'true').lower() == 'true'
 
 app = Flask(__name__)
-CORS(app)  # CORS 설정 추가
+CORS(app, origins=["https://tools-77.vercel.app", "http://localhost:3000"])  # CORS 설정 추가
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 max_mb = int(os.environ.get("MAX_CONTENT_LENGTH_MB", "100"))
 app.config["MAX_CONTENT_LENGTH"] = max_mb * 1024 * 1024

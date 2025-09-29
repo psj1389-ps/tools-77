@@ -56,7 +56,7 @@ vercel --prod
 Vercel 대시보드 → Settings → Environment Variables에서 설정:
 
 ```
-VITE_API_BASE_URL=https://your-backend-api.com
+VITE_API_BASE_URL=https://tools-77.vercel.app
 VITE_PDF_SERVICE_URL=https://pdf-doc-306w.onrender.com
 VITE_DEV_MODE=false
 VITE_APP_VERSION=1.0.0
